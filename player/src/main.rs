@@ -14,6 +14,7 @@ fn setup_audio_output() -> Option<Device> {
 }
 
 fn main() -> iced::Result {
+    tracing_subscriber::fmt::init();
     // First things first the player will need to setup it's audio interfaces and get ready for playback
     let device = setup_audio_output().expect("unable to setup audio device");
 
@@ -43,6 +44,7 @@ fn main() -> iced::Result {
         .theme(theme)
         .decorations(false)
         .antialiasing(true)
+        .subscription(Application::subscription)
         .run()
 }
 

@@ -2,6 +2,7 @@ use chrono::DateTime;
 use iced::{
     Alignment::Center,
     Element, Length, Task,
+    keyboard::Key,
     widget::{Column, Container, Image, container, image, text},
 };
 use model::{
@@ -22,6 +23,7 @@ pub enum NowPlayingMessage {
     PlaybackStart,
     PlaybackStop,
     PlaybackComplete,
+    InputEvent(Key),
 }
 
 #[derive(Debug, Clone)]
@@ -85,5 +87,7 @@ async fn load_track(id: u64) -> Track {
     Track {
         id: id.clone(),
         name: format!("test-track-{}", id).to_string(),
+        artist: 0,
+        release: 0,
     }
 }

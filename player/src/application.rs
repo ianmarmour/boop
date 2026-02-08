@@ -1,6 +1,10 @@
 use iced::{
-    Color, Element, Padding, Task, Theme, border, widget::container, widget::container::Style,
+    Color, Element, Padding, Task, Theme, border,
+    keyboard::{self, Key},
+    widget::container,
+    widget::container::Style,
 };
+use tracing::info;
 
 use crate::{
     library::{Library, LibraryMessage},
@@ -18,6 +22,7 @@ pub enum ApplicationView {
 pub enum ApplicationMessage {
     LibraryMessage(LibraryMessage),
     NowPlaying(NowPlayingMessage),
+    KeyboardInput(Key),
 }
 
 #[derive(Debug, Default, Clone)]
@@ -71,8 +76,34 @@ impl Application {
                     .update(other)
                     .map(ApplicationMessage::LibraryMessage),
             },
+            ApplicationMessage::KeyboardInput(key) => match self.active_view {
+                ApplicationView::Library => self
+                    .library
+                    .update(LibraryMessage::InputEvent(key))
+                    .map(ApplicationMessage::LibraryMessage),
+                ApplicationView::NowPlaying => todo!(),
+            },
             ApplicationMessage::NowPlaying(_) => todo!(),
         }
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<ApplicationMessage> {
+        keyboard::listen().filter_map(|event| {
+            info!("keyboard subscribed key event detected: {:?}", event);
+
+            match event {
+                keyboard::Event::KeyPressed {
+                    key,
+                    modified_key,
+                    physical_key,
+                    location,
+                    modifiers,
+                    text,
+                    repeat,
+                } => Some(ApplicationMessage::KeyboardInput(key)),
+                _ => None,
+            }
+        })
     }
 }
 
