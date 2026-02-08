@@ -81,7 +81,15 @@ impl Application {
                     .library
                     .update(LibraryMessage::InputEvent(key))
                     .map(ApplicationMessage::LibraryMessage),
-                ApplicationView::NowPlaying => todo!(),
+                ApplicationView::NowPlaying => match key {
+                    Key::Named(keyboard::key::Named::Backspace) => {
+                        self.active_view = ApplicationView::Library;
+                        info!("library: {:?}", self.library);
+
+                        Task::none()
+                    }
+                    _ => Task::none(),
+                },
             },
             ApplicationMessage::NowPlaying(_) => todo!(),
         }

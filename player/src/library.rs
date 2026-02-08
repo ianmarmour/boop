@@ -2,6 +2,7 @@ use std::{fmt::Debug, slice};
 
 use iced::{
     Background, Color, Element, Length, Padding, Task, Theme,
+    futures::FutureExt,
     keyboard::Key,
     widget::{
         button,
@@ -11,7 +12,8 @@ use iced::{
     },
 };
 use model::{CatalogItem, artist::Artist, release::Release, track::Track};
-use tracing::{debug, info};
+use model::{CatalogItemKind, Id};
+use tracing::{debug, error, info};
 
 #[derive(Debug, Clone)]
 pub struct LibraryItem {
@@ -62,12 +64,16 @@ impl LibraryItem {
 
         match &self.catalog_item {
             CatalogItem::Artist(data) => button(text(data.name.clone()))
-                .on_press(LibraryMessage::ItemExpand(self.id))
+                .on_press(LibraryMessage::ItemLoad(Some(LibraryItem::new(
+                    CatalogItem::Artist(data.clone()),
+                ))))
                 .width(Length::Fill)
                 .style(button_style)
                 .into(),
             CatalogItem::Release(data) => button(text(data.name.clone()))
-                .on_press(LibraryMessage::ItemExpand(self.id))
+                .on_press(LibraryMessage::ItemLoad(Some(LibraryItem::new(
+                    CatalogItem::Release(data.clone()),
+                ))))
                 .width(Length::Fill)
                 .style(button_style)
                 .into(),
@@ -91,8 +97,8 @@ impl LibraryItem {
 #[derive(Debug, Clone)]
 pub enum LibraryMessage {
     TrackSelect(Track),
-    ItemExpand(u64),
-    ItemsLoad(u64, Vec<LibraryItem>),
+    ItemRefresh(Vec<CatalogItem>),
+    ItemLoad(Option<LibraryItem>),
     InputEvent(Key),
 }
 
@@ -104,58 +110,60 @@ pub enum LibraryItemAction {
 
 #[derive(Debug, Clone)]
 pub struct LibraryItems {
-    cursor: Option<usize>,
     inner: Vec<LibraryItem>,
 }
 
 impl LibraryItems {
     pub fn new(items: Vec<LibraryItem>) -> Self {
-        Self {
-            cursor: None,
-            inner: items,
-        }
+        Self { inner: items }
+    }
+
+    pub fn find(&self, catalog_id: u64) -> Option<&LibraryItem> {
+        self.inner
+            .iter()
+            .find(|item| item.catalog_item.clone().id() == catalog_id)
     }
 
     pub fn select(&mut self, action: LibraryItemAction) {
         debug!("item select action invoked: {:?}", action);
 
-        if let Some(cursor) = self.cursor {
-            self.inner[cursor].toggled_selected();
-        }
+        let selected_idx = self.inner.iter().position(|item| item.selected == true);
 
-        match action {
-            LibraryItemAction::SelectNext => match self.cursor {
-                Some(index) => {
-                    if index < self.inner.len() - 1 {
-                        self.cursor = Some(index + 1)
+        match selected_idx {
+            Some(index) => {
+                // Toggled the element as no longer selected
+                self.inner[index].toggled_selected();
+
+                match action {
+                    LibraryItemAction::SelectNext => {
+                        if index < self.inner.len() - 1 {
+                            self.inner[index + 1].toggled_selected();
+                        } else {
+                            self.inner[index].toggled_selected();
+                        }
+                    }
+                    LibraryItemAction::SelectPrevious => {
+                        if index > 0 {
+                            self.inner[index - 1].toggled_selected();
+                        } else {
+                            self.inner[index].toggled_selected();
+                        }
                     }
                 }
-                None => self.cursor = Some(0),
-            },
-            LibraryItemAction::SelectPrevious => match self.cursor {
-                Some(index) => match index {
-                    0 => self.cursor = Some(index),
-                    _ => self.cursor = Some(index - 1),
-                },
-                None => self.cursor = None, // TODO: Could throw an error using result???
-            },
-        }
-
-        if let Some(cursor) = self.cursor {
-            self.inner[cursor].toggled_selected();
+            }
+            None => self.inner[0].toggled_selected(),
         }
     }
 
     pub fn selected(&self) -> Option<&LibraryItem> {
-        match self.cursor {
-            Some(index) => self.inner.get(index),
-            None => None,
-        }
+        info!("items: {:?}", self.inner);
+
+        self.inner.iter().find(|item| item.selected == true)
     }
 
     pub fn refresh(&mut self, items: Vec<LibraryItem>) -> &Self {
         self.inner = items;
-        self.cursor = None;
+        self.inner[0].toggled_selected();
 
         self
     }
@@ -215,16 +223,28 @@ impl Library {
 
     pub fn update(&mut self, message: LibraryMessage) -> Task<LibraryMessage> {
         match message {
-            LibraryMessage::ItemExpand(id) => {
-                let expanded_item = self.items.iter().find(|item| item.id == id);
+            LibraryMessage::ItemLoad(item) => match item {
+                Some(library_item) => match library_item.catalog_item {
+                    CatalogItem::Artist(a) => {
+                        Task::perform(list_releases(a.id), LibraryMessage::ItemRefresh)
+                    }
+                    CatalogItem::Release(r) => {
+                        Task::perform(list_tracks(r.id), LibraryMessage::ItemRefresh)
+                    }
+                    _ => Task::none(),
+                },
+                None => Task::perform(list_artists(), LibraryMessage::ItemRefresh),
+            },
+            LibraryMessage::ItemRefresh(items) => {
+                error!("We're cooked boys: {:?}", items);
+                let items = items
+                    .iter()
+                    .map(|item| LibraryItem::new(item.clone()))
+                    .collect();
+                error!("We're cooked boys: {:?}", items);
 
-                match expanded_item {
-                    Some(item) => self.load_children(&item),
-                    None => todo!(),
-                }
-            }
-            LibraryMessage::ItemsLoad(_, items) => {
                 self.items.refresh(items);
+
                 Task::none()
             }
             LibraryMessage::InputEvent(key) => {
@@ -244,10 +264,33 @@ impl Library {
                             CatalogItem::Track(t) => {
                                 Task::done(LibraryMessage::TrackSelect(t.clone()))
                             }
-                            _ => self.load_children(&item),
+                            CatalogItem::Artist(a) => Task::perform(
+                                get_artist(a.id).map(LibraryItem::new).map(Some),
+                                LibraryMessage::ItemLoad,
+                            ),
+                            CatalogItem::Release(r) => Task::perform(
+                                get_release(r.id).map(LibraryItem::new).map(Some),
+                                LibraryMessage::ItemLoad,
+                            ),
                         },
                         None => todo!(),
                     },
+                    Key::Named(iced::keyboard::key::Named::Backspace) => {
+                        match self.items.selected() {
+                            Some(item) => match &item.catalog_item {
+                                CatalogItem::Release(r) => {
+                                    error!("fetching releases");
+                                    Task::done(LibraryMessage::ItemLoad(None))
+                                }
+                                CatalogItem::Track(t) => Task::perform(
+                                    get_artist(t.artist).map(LibraryItem::new).map(Some),
+                                    LibraryMessage::ItemLoad,
+                                ),
+                                _ => Task::none(),
+                            },
+                            None => todo!(),
+                        }
+                    }
                     _ => Task::none(),
                 }
             }
@@ -267,60 +310,84 @@ impl Library {
 
         col.into()
     }
-
-    // Library handles all loading logic
-    fn load_children(&self, item: &LibraryItem) -> Task<LibraryMessage> {
-        let id = item.id;
-
-        match &item.catalog_item {
-            CatalogItem::Artist(artist) => {
-                Task::perform(load_releases(artist.releases.clone()), move |items| {
-                    LibraryMessage::ItemsLoad(
-                        id,
-                        items
-                            .iter()
-                            .map(|release| {
-                                LibraryItem::new(CatalogItem::Release(release.to_owned()))
-                            })
-                            .collect(),
-                    )
-                })
-            }
-            CatalogItem::Release(release) => {
-                Task::perform(load_tracks(release.tracks.clone()), move |items| {
-                    LibraryMessage::ItemsLoad(
-                        id,
-                        items
-                            .iter()
-                            .map(|track| LibraryItem::new(CatalogItem::Track(track.to_owned())))
-                            .collect(),
-                    )
-                })
-            }
-            CatalogItem::Track(track) => Task::none(),
-            _ => Task::none(),
-        }
-    }
 }
 
-async fn load_releases(ids: Vec<u64>) -> Vec<Release> {
-    ids.iter()
-        .map(|id| Release {
-            id: id.clone(),
-            name: format!("test-release-{}", id).to_string(),
-            tracks: vec![0, 1, 2, 3],
-            artist: 0,
-        })
-        .collect()
+async fn get_artist(id: u64) -> CatalogItem {
+    CatalogItem::Artist(Artist {
+        id: id.clone(),
+        name: format!("test-release-{}", id).to_string(),
+        releases: vec![0, 1, 2, 3],
+    })
 }
 
-async fn load_tracks(ids: Vec<u64>) -> Vec<Track> {
-    ids.iter()
-        .map(|id| Track {
-            id: id.clone(),
-            name: format!("test-track-{}", id).to_string(),
-            release: 0,
+async fn list_artists() -> Vec<CatalogItem> {
+    vec![CatalogItem::Artist(Artist {
+        id: 0,
+        name: format!("test-artist-{}", 0).to_string(),
+        releases: vec![0, 1, 2],
+    })]
+}
+
+async fn get_release(id: u64) -> CatalogItem {
+    CatalogItem::Release(Release {
+        id: id.clone(),
+        name: format!("test-release-{}", id).to_string(),
+        tracks: vec![0, 1, 2, 3],
+        artist: 0,
+    })
+}
+
+async fn list_releases(artist_id: u64) -> Vec<CatalogItem> {
+    vec![
+        CatalogItem::Release(Release {
+            id: 0,
+            name: format!("test-release-{}", 0).to_string(),
+            tracks: vec![0, 1, 2],
+            artist: artist_id,
+        }),
+        CatalogItem::Release(Release {
+            id: 1,
+            name: format!("test-release-{}", 1).to_string(),
+            tracks: vec![3, 4, 5],
+            artist: artist_id,
+        }),
+        CatalogItem::Release(Release {
+            id: 2,
+            name: format!("test-release-{}", 2).to_string(),
+            tracks: vec![6, 7, 8],
+            artist: artist_id,
+        }),
+    ]
+}
+
+async fn get_track(id: u64) -> CatalogItem {
+    CatalogItem::Track(Track {
+        id: id.clone(),
+        name: format!("test-track-{}", id).to_string(),
+        release: 0,
+        artist: 0,
+    })
+}
+
+async fn list_tracks(release_id: u64) -> Vec<CatalogItem> {
+    vec![
+        CatalogItem::Track(Track {
+            id: 0,
+            name: format!("test-track-{}", 0).to_string(),
+            release: release_id,
             artist: 0,
-        })
-        .collect()
+        }),
+        CatalogItem::Track(Track {
+            id: 1,
+            name: format!("test-track-{}", 1).to_string(),
+            release: release_id,
+            artist: 0,
+        }),
+        CatalogItem::Track(Track {
+            id: 2,
+            name: format!("test-track-{}", 2).to_string(),
+            release: release_id,
+            artist: 0,
+        }),
+    ]
 }
