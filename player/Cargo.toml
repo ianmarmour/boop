@@ -1,6 +1,11 @@
 [package]
-name = "boop-player"
+name = "player"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = "0.4.43"
+cpal = "0.17.1"
+iced = "0.14.0"
+symphonia = "0.5.5"
+model = { workspace = true }
