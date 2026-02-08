@@ -4,67 +4,61 @@ use iced::{
     Element, Length, Padding, Task, Theme,
     widget::{button, keyed::Column, text},
 };
-use model::{artist::Artist, release::Release, track::Track};
-
-#[derive(Debug, Clone)]
-pub enum LibraryItemCatalogData {
-    Artist(Artist),
-    Release(Release),
-    Track(Track),
-}
+use model::{CatalogItem, artist::Artist, release::Release, track::Track};
 
 #[derive(Debug, Clone)]
 pub struct LibraryItem {
     pub id: u64,
-    pub catalog_data: LibraryItemCatalogData,
+    pub catalog_item: CatalogItem,
 }
 
 impl LibraryItem {
-    pub fn new(catalog_data: LibraryItemCatalogData) -> Self {
+    pub fn new(catalog_data: CatalogItem) -> Self {
         match catalog_data {
-            LibraryItemCatalogData::Artist(data) => Self {
+            CatalogItem::Artist(data) => Self {
                 id: data.id,
-                catalog_data: LibraryItemCatalogData::Artist(data),
+                catalog_item: CatalogItem::Artist(data),
             },
-            LibraryItemCatalogData::Release(data) => Self {
+            CatalogItem::Release(data) => Self {
                 id: data.id,
-                catalog_data: LibraryItemCatalogData::Release(data),
+                catalog_item: CatalogItem::Release(data),
             },
-            LibraryItemCatalogData::Track(data) => Self {
+            CatalogItem::Track(data) => Self {
                 id: data.id,
-                catalog_data: LibraryItemCatalogData::Track(data),
+                catalog_item: CatalogItem::Track(data),
             },
         }
     }
 
     pub fn view(&self) -> Element<LibraryMessage> {
-        match &self.catalog_data {
-            LibraryItemCatalogData::Artist(data) => button(text(data.name.clone()))
+        match &self.catalog_item {
+            CatalogItem::Artist(data) => button(text(data.name.clone()))
                 .on_press(LibraryMessage::ItemExpand(self.id))
                 .width(Length::Fill)
                 .into(),
-            LibraryItemCatalogData::Release(data) => button(text(data.name.clone()))
+            CatalogItem::Release(data) => button(text(data.name.clone()))
                 .on_press(LibraryMessage::ItemExpand(self.id))
                 .width(Length::Fill)
                 .into(),
-            LibraryItemCatalogData::Track(data) => button(text(data.name.clone()))
-                .on_press(LibraryMessage::ItemExpand(self.id))
+            CatalogItem::Track(data) => button(text(data.name.clone()))
+                .on_press(LibraryMessage::TrackSelect(data.clone()))
                 .width(Length::Fill)
                 .into(),
         }
     }
 
     pub fn is_expandable(&self) -> bool {
-        match self.catalog_data {
-            LibraryItemCatalogData::Artist(_) => true,
-            LibraryItemCatalogData::Release(_) => true,
-            LibraryItemCatalogData::Track(_) => false,
+        match self.catalog_item {
+            CatalogItem::Artist(_) => true,
+            CatalogItem::Release(_) => true,
+            CatalogItem::Track(_) => false,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum LibraryMessage {
+    TrackSelect(Track),
     ItemExpand(u64),
     ItemsLoad(u64, Vec<LibraryItem>),
 }
@@ -79,7 +73,7 @@ impl Default for Library {
         Library {
             items: vec![LibraryItem {
                 id: 012345,
-                catalog_data: LibraryItemCatalogData::Artist(Artist {
+                catalog_item: CatalogItem::Artist(Artist {
                     id: 012345,
                     name: "test-artist".to_string(),
                     releases: vec![0, 1, 2, 3, 4, 5],
@@ -129,35 +123,32 @@ impl Library {
     fn load_children(&self, item: &LibraryItem) -> Task<LibraryMessage> {
         let id = item.id;
 
-        match &item.catalog_data {
-            LibraryItemCatalogData::Artist(artist) => {
+        match &item.catalog_item {
+            CatalogItem::Artist(artist) => {
                 Task::perform(load_releases(artist.releases.clone()), move |items| {
                     LibraryMessage::ItemsLoad(
                         id,
                         items
                             .iter()
                             .map(|release| {
-                                LibraryItem::new(LibraryItemCatalogData::Release(
-                                    release.to_owned(),
-                                ))
+                                LibraryItem::new(CatalogItem::Release(release.to_owned()))
                             })
                             .collect(),
                     )
                 })
             }
-            LibraryItemCatalogData::Release(release) => {
+            CatalogItem::Release(release) => {
                 Task::perform(load_tracks(release.tracks.clone()), move |items| {
                     LibraryMessage::ItemsLoad(
                         id,
                         items
                             .iter()
-                            .map(|track| {
-                                LibraryItem::new(LibraryItemCatalogData::Track(track.to_owned()))
-                            })
+                            .map(|track| LibraryItem::new(CatalogItem::Track(track.to_owned())))
                             .collect(),
                     )
                 })
             }
+            CatalogItem::Track(track) => Task::none(),
             _ => Task::none(),
         }
     }

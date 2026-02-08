@@ -2,27 +2,49 @@ use iced::{
     Color, Element, Padding, Task, Theme, border, widget::container, widget::container::Style,
 };
 
-use crate::library::{Library, LibraryMessage};
+use crate::{
+    library::{Library, LibraryMessage},
+    now_playing::{NowPlaying, NowPlayingMessage},
+};
+
+#[derive(Default, Debug, Clone)]
+pub enum ApplicationView {
+    #[default]
+    Library,
+    NowPlaying,
+}
 
 #[derive(Debug, Clone)]
 pub enum ApplicationMessage {
     LibraryMessage(LibraryMessage),
+    NowPlaying(NowPlayingMessage),
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct Application {
+    active_view: ApplicationView,
+    pub now_playing: NowPlaying,
     pub library: Library,
 }
 
 impl Application {
     pub fn new() -> Application {
         Application {
+            active_view: ApplicationView::default(),
+            now_playing: NowPlaying::default(),
             library: Library::default(),
         }
     }
 
     pub fn view(&self) -> Element<ApplicationMessage> {
-        container(self.library.view().map(ApplicationMessage::LibraryMessage))
+        let view_element = match self.active_view {
+            ApplicationView::Library => self.library.view().map(ApplicationMessage::LibraryMessage),
+            ApplicationView::NowPlaying => {
+                self.now_playing.view().map(ApplicationMessage::NowPlaying)
+            }
+        };
+
+        container(view_element)
             .padding(Padding {
                 top: 0.0,
                 bottom: 0.0,
@@ -38,10 +60,18 @@ impl Application {
 
     pub fn update(&mut self, message: ApplicationMessage) -> Task<ApplicationMessage> {
         match message {
-            ApplicationMessage::LibraryMessage(message) => self
-                .library
-                .update(message)
-                .map(ApplicationMessage::LibraryMessage),
+            ApplicationMessage::LibraryMessage(message) => match message {
+                LibraryMessage::TrackSelect(track) => {
+                    self.now_playing = NowPlaying::new(track);
+                    self.active_view = ApplicationView::NowPlaying;
+                    Task::none()
+                }
+                other => self
+                    .library
+                    .update(other)
+                    .map(ApplicationMessage::LibraryMessage),
+            },
+            ApplicationMessage::NowPlaying(_) => todo!(),
         }
     }
 }

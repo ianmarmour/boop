@@ -1,16 +1,12 @@
 use cpal::{Device, traits::HostTrait};
-use model::artist::Artist;
 
-use crate::{
-    application::Application,
-    library::{Library, LibraryItem, LibraryItemCatalogData},
-};
+use crate::application::Application;
 use iced::{Color, Element, Theme};
-use iced::{Program, widget::container};
 
 mod application;
 mod controls;
 mod library;
+mod now_playing;
 
 fn setup_audio_output() -> Option<Device> {
     let host = cpal::default_host();
