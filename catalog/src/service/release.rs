@@ -1,23 +1,18 @@
-use std::sync::Arc;
-
 use crate::{
+    ApplicationState,
     model::{CatalogItem, release::Release},
-    repository::{
-        Repository,
-        release::{ReleaseFilter, ReleaseRepository},
-    },
+    repository::{Repository, release::ReleaseFilter},
 };
-use tokio::sync::Mutex;
 use zbus::fdo::Error;
 use zbus::interface;
 
 pub struct ReleaseService {
-    repository: Arc<Mutex<ReleaseRepository>>,
+    application_state: ApplicationState,
 }
 
 impl ReleaseService {
-    pub fn new(repository: Arc<Mutex<ReleaseRepository>>) -> ReleaseService {
-        Self { repository }
+    pub fn new(application_state: ApplicationState) -> ReleaseService {
+        Self { application_state }
     }
 }
 
@@ -25,7 +20,8 @@ impl ReleaseService {
 impl ReleaseService {
     async fn get_release(&mut self, name: &str) -> Result<CatalogItem<Release>, Error> {
         let releases = self
-            .repository
+            .application_state
+            .releases
             .lock()
             .await
             .find(ReleaseFilter {
@@ -44,7 +40,8 @@ impl ReleaseService {
         &mut self,
         filter: ReleaseFilter,
     ) -> Result<Vec<CatalogItem<Release>>, Error> {
-        self.repository
+        self.application_state
+            .releases
             .lock()
             .await
             .find(filter)

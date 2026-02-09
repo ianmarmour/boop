@@ -1,23 +1,18 @@
-use std::sync::Arc;
-
 use crate::{
+    ApplicationState,
     model::{CatalogItem, artist::Artist},
-    repository::{
-        Repository,
-        artist::{ArtistFilter, ArtistRepository},
-    },
+    repository::{Repository, artist::ArtistFilter},
 };
-use tokio::sync::Mutex;
 use zbus::fdo::Error;
 use zbus::interface;
 
 pub struct ArtistService {
-    repository: Arc<Mutex<ArtistRepository>>,
+    application_state: ApplicationState,
 }
 
 impl ArtistService {
-    pub fn new(repository: Arc<Mutex<ArtistRepository>>) -> ArtistService {
-        Self { repository }
+    pub fn new(application_state: ApplicationState) -> ArtistService {
+        Self { application_state }
     }
 }
 
@@ -25,7 +20,8 @@ impl ArtistService {
 impl ArtistService {
     async fn get_artist(&mut self, name: &str) -> Result<CatalogItem<Artist>, Error> {
         let artists = self
-            .repository
+            .application_state
+            .artists
             .lock()
             .await
             .find(ArtistFilter {
@@ -44,7 +40,8 @@ impl ArtistService {
         &mut self,
         filter: ArtistFilter,
     ) -> Result<Vec<CatalogItem<Artist>>, Error> {
-        self.repository
+        self.application_state
+            .artists
             .lock()
             .await
             .find(filter)

@@ -5,11 +5,9 @@ use tokio::sync::Mutex;
 use zbus::connection;
 
 use catalog::{
+    ApplicationState,
     repository::{artist::ArtistRepository, release::ReleaseRepository},
-    service::{
-        artist::ArtistService,
-        release::{self, ReleaseService},
-    },
+    service::{artist::ArtistService, release::ReleaseService},
 };
 
 #[tokio::main]
@@ -24,22 +22,24 @@ async fn main() {
         .await
         .expect("error initializing database");
 
-    // Setup our repositories.
-    let artist_repository = Arc::new(Mutex::new(
-        ArtistRepository::new(database_pool.clone())
-            .await
-            .expect("error initializing artist repository"),
-    ));
-
-    let release_repository = Arc::new(Mutex::new(
-        ReleaseRepository::new(database_pool.clone())
-            .await
-            .expect("error initializing artist repository"),
-    ));
+    // Setup our shared application state.
+    let state = ApplicationState {
+        artists: Arc::new(Mutex::new(
+            ArtistRepository::new(database_pool.clone())
+                .await
+                .expect("error initializing artist repository"),
+        )),
+        releases: Arc::new(Mutex::new(
+            ReleaseRepository::new(database_pool.clone())
+                .await
+                .expect("error initializing artist repository"),
+        )),
+    };
 
     // Setup our services.
-    let artist_service = ArtistService::new(artist_repository.clone());
-    let release_service = ReleaseService::new(release_repository.clone());
+    let artist_service = ArtistService::new(state.clone());
+    let release_service = ReleaseService::new(state.clone());
+
     // Setup our DBUS connection
     let _connection = connection::Builder::session()
         .expect("could not build session")
