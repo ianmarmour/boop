@@ -4,7 +4,13 @@ use sqlx::pool::PoolOptions;
 use tokio::sync::Mutex;
 use zbus::connection;
 
-use catalog::{repository::artist::ArtistRepository, service::artist::ArtistService};
+use catalog::{
+    repository::{artist::ArtistRepository, release::ReleaseRepository},
+    service::{
+        artist::ArtistService,
+        release::{self, ReleaseService},
+    },
+};
 
 #[tokio::main]
 async fn main() {
@@ -18,18 +24,31 @@ async fn main() {
         .await
         .expect("error initializing database");
 
-    // Setup our various DBUS services and repositories.
-    let artist_repository = ArtistRepository::new(database_pool)
-        .await
-        .expect("error initializing artist repository");
+    // Setup our repositories.
+    let artist_repository = Arc::new(Mutex::new(
+        ArtistRepository::new(database_pool.clone())
+            .await
+            .expect("error initializing artist repository"),
+    ));
 
-    let artist_service = ArtistService::new(Arc::new(Mutex::new(artist_repository)));
-    let _ = connection::Builder::session()
+    let release_repository = Arc::new(Mutex::new(
+        ReleaseRepository::new(database_pool.clone())
+            .await
+            .expect("error initializing artist repository"),
+    ));
+
+    // Setup our services.
+    let artist_service = ArtistService::new(artist_repository.clone());
+    let release_service = ReleaseService::new(release_repository.clone());
+    // Setup our DBUS connection
+    let _connection = connection::Builder::session()
         .expect("could not build session")
-        .name("org.boop.artist")
+        .name("org.boop.catalog")
         .expect("could not build name")
-        .serve_at("/org/boop/artist", artist_service)
-        .expect("could not serve at desired location")
+        .serve_at("/org/boop/catalog/artist", artist_service)
+        .expect("could not serve artist")
+        .serve_at("/org/boop/catalog/release", release_service)
+        .expect("could not serve release")
         .build()
         .await
         .expect("could not build connection");

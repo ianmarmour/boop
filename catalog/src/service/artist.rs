@@ -21,7 +21,7 @@ impl ArtistService {
     }
 }
 
-#[interface(name = "org.boop.artist")]
+#[interface(name = "org.boop.catalog.artist")]
 impl ArtistService {
     async fn get_artist(&mut self, name: &str) -> Result<CatalogItem<Artist>, Error> {
         let artists = self

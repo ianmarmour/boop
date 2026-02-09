@@ -6,9 +6,9 @@ use crate::{
 };
 
 #[proxy(
-    interface = "org.boop.artist",
-    default_service = "org.boop.artist",
-    default_path = "/org/boop/artist"
+    interface = "org.boop.catalog.artist",
+    default_service = "org.boop.catalog",
+    default_path = "/org/boop/catalog/artist"
 )]
 pub trait ArtistService {
     async fn get_artist(&self, name: &str) -> Result<CatalogItem<Artist>>;

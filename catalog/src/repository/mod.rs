@@ -6,6 +6,7 @@ use zvariant::Type;
 use crate::model::CatalogItem;
 
 pub mod artist;
+pub mod release;
 
 #[derive(Debug, Error)]
 pub enum RepositoryError {
