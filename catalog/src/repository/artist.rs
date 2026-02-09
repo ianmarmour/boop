@@ -20,25 +20,27 @@ impl ArtistRepository {
 
 #[async_trait]
 impl Repository for ArtistRepository {
-    type Item = CatalogItem<Artist>;
+    type Item = Artist;
 
-    async fn create(&mut self, item: Self::Item) -> Result<Self::Item, RepositoryError> {
-        sqlx::query(&format!(
-            "INSERT INTO {} (id, metadata) VALUES ($1, $2)",
+    async fn create(
+        &mut self,
+        item: Self::Item,
+    ) -> Result<CatalogItem<Self::Item>, RepositoryError> {
+        let catalog_item: CatalogItem<Artist> = sqlx::query_as(&format!(
+            "INSERT INTO {} (metadata) VALUES ($1) RETURNING id, metadata",
             ARTIST_TABLE_NAME
         ))
-        .bind(&item.id)
-        .bind(&serde_json::to_string(&item.metadata).map_err(|_| RepositoryError::ItemCreate)?)
-        .execute(&self.pool)
+        .bind(serde_json::to_string(&item).map_err(|_| RepositoryError::ItemCreate)?)
+        .fetch_one(&self.pool)
         .await
         .map_err(|_| RepositoryError::ItemCreate)?;
 
-        Ok(item)
+        Ok(catalog_item)
     }
 
-    async fn read(&mut self, id: &i64) -> Result<Self::Item, RepositoryError> {
+    async fn read(&mut self, id: &i64) -> Result<CatalogItem<Self::Item>, RepositoryError> {
         let catalog_item: CatalogItem<Artist> = sqlx::query_as(&format!(
-            "SELECT id, metadata FROM {} WHERE id = $1",
+            "SELECT key, metadata FROM {} WHERE key = $1",
             ARTIST_TABLE_NAME
         ))
         .bind(&id)
@@ -49,7 +51,10 @@ impl Repository for ArtistRepository {
         Ok(catalog_item)
     }
 
-    async fn update(&mut self, item: Self::Item) -> Result<Self::Item, RepositoryError> {
+    async fn update(
+        &mut self,
+        item: CatalogItem<Self::Item>,
+    ) -> Result<CatalogItem<Self::Item>, RepositoryError> {
         sqlx::query(&format!(
             "UPDATE {} SET metadata = $1 WHERE id = $2",
             ARTIST_TABLE_NAME

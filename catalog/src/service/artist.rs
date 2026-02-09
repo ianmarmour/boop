@@ -21,7 +21,7 @@ impl ArtistService {
 
 #[interface(name = "org.boop.artist")]
 impl ArtistService {
-    async fn create(&mut self, item: CatalogItem<Artist>) -> Result<CatalogItem<Artist>, Error> {
+    async fn create(&mut self, item: Artist) -> Result<CatalogItem<Artist>, Error> {
         self.repository
             .lock()
             .await
