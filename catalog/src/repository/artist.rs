@@ -27,8 +27,8 @@ impl Repository for ArtistRepository {
             "INSERT INTO {} (id, metadata) VALUES ($1, $2)",
             ARTIST_TABLE_NAME
         ))
-        .bind(item.id)
-        .bind(serde_json::to_string(&item.metadata).map_err(|_| RepositoryError::ItemCreate)?)
+        .bind(&item.id)
+        .bind(&serde_json::to_string(&item.metadata).map_err(|_| RepositoryError::ItemCreate)?)
         .execute(&self.pool)
         .await
         .map_err(|_| RepositoryError::ItemCreate)?;
@@ -47,5 +47,19 @@ impl Repository for ArtistRepository {
         .map_err(|_| RepositoryError::ItemCreate)?;
 
         Ok(catalog_item)
+    }
+
+    async fn update(&mut self, item: Self::Item) -> Result<Self::Item, RepositoryError> {
+        sqlx::query(&format!(
+            "UPDATE {} SET metadata = $1 WHERE id = $2",
+            ARTIST_TABLE_NAME
+        ))
+        .bind(&serde_json::to_string(&item.metadata).map_err(|_| RepositoryError::ItemCreate)?)
+        .bind(&item.id)
+        .execute(&self.pool)
+        .await
+        .map_err(|_| RepositoryError::ItemCreate)?;
+
+        Ok(item)
     }
 }

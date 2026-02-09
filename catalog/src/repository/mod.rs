@@ -23,4 +23,5 @@ pub trait Repository {
 
     async fn create(&mut self, item: Self::Item) -> Result<Self::Item, RepositoryError>;
     async fn read(&mut self, id: &i64) -> Result<Self::Item, RepositoryError>;
+    async fn update(&mut self, item: Self::Item) -> Result<Self::Item, RepositoryError>;
 }

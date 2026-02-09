@@ -38,4 +38,13 @@ impl ArtistService {
             .await
             .map_err(|e| Error::Failed(e.to_string()))
     }
+
+    async fn update(&mut self, item: CatalogItem<Artist>) -> Result<CatalogItem<Artist>, Error> {
+        self.repository
+            .lock()
+            .await
+            .update(item)
+            .await
+            .map_err(|e| Error::Failed(e.to_string()))
+    }
 }
