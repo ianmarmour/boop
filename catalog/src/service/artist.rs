@@ -1,9 +1,5 @@
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
-use zbus::fdo::Error;
-use zbus::interface;
-
 use crate::{
     model::{CatalogItem, artist::Artist},
     repository::{
@@ -11,6 +7,9 @@ use crate::{
         artist::{ArtistFilter, ArtistRepository},
     },
 };
+use tokio::sync::Mutex;
+use zbus::fdo::Error;
+use zbus::interface;
 
 pub struct ArtistService {
     repository: Arc<Mutex<ArtistRepository>>,

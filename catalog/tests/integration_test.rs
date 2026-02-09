@@ -1,4 +1,5 @@
 use catalog::{
+    client::artist::ArtistServiceProxy,
     model::{CatalogItem, artist::Artist},
     repository::artist::ArtistFilter,
 };
@@ -18,17 +19,12 @@ async fn test_get_artist() {
         .await
         .expect("failed to connect to dbus");
 
+    let client = ArtistServiceProxy::new(&connection)
+        .await
+        .expect("unable to create client");
+
     // Wait for service to be ready
     for _ in 0..50 {
-        let proxy = zbus::Proxy::new(
-            &connection,
-            "org.boop.artist",
-            "/org/boop/artist",
-            "org.boop.artist",
-        )
-        .await
-        .expect("failed to create proxy");
-
         let filter = ArtistFilter::default();
 
         // Debug: print what signature we're sending
@@ -37,12 +33,12 @@ async fn test_get_artist() {
             <ArtistFilter as zbus::zvariant::Type>::SIGNATURE
         );
 
-        let result: Result<Vec<CatalogItem<Artist>>, _> =
-            proxy.call("ListArtists", &(filter,)).await;
+        let result = client.list_artists(filter).await;
 
-        println!("Result: {:?}", result);
-
-        sleep(Duration::from_millis(100)).await;
+        match result {
+            Ok(_) => return,
+            Err(_) => sleep(Duration::from_millis(100)).await,
+        }
     }
 
     panic!("service did not start in time");
