@@ -1,17 +1,11 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use thiserror::Error;
 use zvariant::Type;
 
 use crate::model::CatalogItem;
 
 pub mod artist;
-
-pub struct RepositoryPaginatedResponse<T> {
-    items: Vec<T>,
-    next_token: Option<String>,
-}
 
 #[derive(Debug, Error)]
 pub enum RepositoryError {
@@ -24,6 +18,8 @@ pub enum RepositoryError {
 #[async_trait]
 pub trait Repository {
     type Item: Serialize + for<'de> Deserialize<'de> + Type;
+    type Filter: Default + Serialize + for<'de> Deserialize<'de> + Type;
+    const TABLE_NAME: &'static str;
 
     async fn create(
         &mut self,
@@ -34,4 +30,9 @@ pub trait Repository {
         &mut self,
         item: CatalogItem<Self::Item>,
     ) -> Result<CatalogItem<Self::Item>, RepositoryError>;
+    async fn delete(&mut self, id: &i64) -> Result<(), RepositoryError>;
+    async fn find(
+        &self,
+        filter: Self::Filter,
+    ) -> Result<Vec<CatalogItem<Self::Item>>, RepositoryError>;
 }

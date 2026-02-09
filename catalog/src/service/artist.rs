@@ -6,7 +6,10 @@ use zbus::interface;
 
 use crate::{
     model::{CatalogItem, artist::Artist},
-    repository::{Repository, artist::ArtistRepository},
+    repository::{
+        Repository,
+        artist::{ArtistFilter, ArtistRepository},
+    },
 };
 
 pub struct ArtistService {
@@ -21,29 +24,31 @@ impl ArtistService {
 
 #[interface(name = "org.boop.artist")]
 impl ArtistService {
-    async fn create(&mut self, item: Artist) -> Result<CatalogItem<Artist>, Error> {
-        self.repository
+    async fn get_artist(&mut self, name: &str) -> Result<CatalogItem<Artist>, Error> {
+        let artists = self
+            .repository
             .lock()
             .await
-            .create(item)
+            .find(ArtistFilter {
+                name: Some(name.to_string()),
+            })
             .await
-            .map_err(|e| Error::Failed(e.to_string()))
+            .map_err(|e| Error::Failed(e.to_string()))?;
+
+        artists
+            .first()
+            .cloned()
+            .ok_or_else(|| Error::Failed("no artist found".to_string()))
     }
 
-    async fn read(&mut self, id: i64) -> Result<CatalogItem<Artist>, Error> {
+    async fn list_artists(
+        &mut self,
+        filter: Option<ArtistFilter>,
+    ) -> Result<Vec<CatalogItem<Artist>>, Error> {
         self.repository
             .lock()
             .await
-            .read(&id)
-            .await
-            .map_err(|e| Error::Failed(e.to_string()))
-    }
-
-    async fn update(&mut self, item: CatalogItem<Artist>) -> Result<CatalogItem<Artist>, Error> {
-        self.repository
-            .lock()
-            .await
-            .update(item)
+            .find(filter.unwrap_or_default())
             .await
             .map_err(|e| Error::Failed(e.to_string()))
     }
