@@ -24,7 +24,7 @@ async fn main() {
         .expect("error initializing artist repository");
 
     let artist_service = ArtistService::new(Arc::new(Mutex::new(artist_repository)));
-    let connection = connection::Builder::session()
+    let _ = connection::Builder::session()
         .expect("could not build session")
         .name("org.boop.artist")
         .expect("could not build name")
