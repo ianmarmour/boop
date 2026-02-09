@@ -9,10 +9,10 @@ pub mod artist;
 
 #[derive(Debug, Error)]
 pub enum RepositoryError {
-    #[error("unable to create item")]
-    ItemCreate,
-    #[error("unable to read item")]
-    ItemRead,
+    #[error("unable to create item: {0}")]
+    ItemCreate(String),
+    #[error("unable to read item: {0}")]
+    ItemRead(String),
 }
 
 #[async_trait]
@@ -21,6 +21,7 @@ pub trait Repository {
     type Filter: Default + Serialize + for<'de> Deserialize<'de> + Type;
     const TABLE_NAME: &'static str;
 
+    async fn setup(&mut self) -> Result<(), RepositoryError>;
     async fn create(
         &mut self,
         item: Self::Item,

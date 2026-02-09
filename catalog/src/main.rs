@@ -19,16 +19,20 @@ async fn main() {
         .expect("error initializing database");
 
     // Setup our various DBUS services and repositories.
-    let artist_repository = ArtistRepository::new(database_pool);
+    let artist_repository = ArtistRepository::new(database_pool)
+        .await
+        .expect("error initializing artist repository");
+
     let artist_service = ArtistService::new(Arc::new(Mutex::new(artist_repository)));
-    let _ = connection::Builder::session()
+    let connection = connection::Builder::session()
         .expect("could not build session")
         .name("org.boop.artist")
         .expect("could not build name")
         .serve_at("/org/boop/artist", artist_service)
         .expect("could not serve at desired location")
         .build()
-        .await;
+        .await
+        .expect("could not build connection");
 
     tokio::signal::ctrl_c().await.unwrap();
 }

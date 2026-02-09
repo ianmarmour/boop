@@ -43,12 +43,12 @@ impl ArtistService {
 
     async fn list_artists(
         &mut self,
-        filter: Option<ArtistFilter>,
+        filter: ArtistFilter,
     ) -> Result<Vec<CatalogItem<Artist>>, Error> {
         self.repository
             .lock()
             .await
-            .find(filter.unwrap_or_default())
+            .find(filter)
             .await
             .map_err(|e| Error::Failed(e.to_string()))
     }

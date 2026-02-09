@@ -13,8 +13,10 @@ pub struct ArtistRepository {
 }
 
 impl ArtistRepository {
-    pub fn new(pool: AnyPool) -> Self {
-        ArtistRepository { pool }
+    pub async fn new(pool: AnyPool) -> Result<Self, RepositoryError> {
+        let mut repository = Self { pool };
+        repository.setup().await?;
+        Ok(repository)
     }
 }
 
@@ -29,6 +31,21 @@ impl Repository for ArtistRepository {
     type Filter = ArtistFilter;
     const TABLE_NAME: &'static str = "artists";
 
+    async fn setup(&mut self) -> Result<(), RepositoryError> {
+        sqlx::query(&format!(
+            "CREATE TABLE IF NOT EXISTS {} (
+                id INTEGER PRIMARY KEY,
+                metadata TEXT NOT NULL
+            )",
+            Self::TABLE_NAME
+        ))
+        .execute(&self.pool)
+        .await
+        .expect("failed to create artists table");
+
+        Ok(())
+    }
+
     async fn create(
         &mut self,
         item: Self::Item,
@@ -37,10 +54,10 @@ impl Repository for ArtistRepository {
             "INSERT INTO {} (metadata) VALUES ($1) RETURNING id, metadata",
             Self::TABLE_NAME
         ))
-        .bind(serde_json::to_string(&item).map_err(|_| RepositoryError::ItemCreate)?)
+        .bind(serde_json::to_string(&item).map_err(|e| RepositoryError::ItemCreate(e.to_string()))?)
         .fetch_one(&self.pool)
         .await
-        .map_err(|_| RepositoryError::ItemCreate)?;
+        .map_err(|e| RepositoryError::ItemCreate(e.to_string()))?;
 
         Ok(catalog_item)
     }
@@ -53,7 +70,7 @@ impl Repository for ArtistRepository {
         .bind(&id)
         .fetch_one(&self.pool)
         .await
-        .map_err(|_| RepositoryError::ItemCreate)?;
+        .map_err(|e| RepositoryError::ItemCreate(e.to_string()))?;
 
         Ok(catalog_item)
     }
@@ -66,11 +83,14 @@ impl Repository for ArtistRepository {
             "UPDATE {} SET metadata = $1 WHERE id = $2",
             Self::TABLE_NAME
         ))
-        .bind(&serde_json::to_string(&item.metadata).map_err(|_| RepositoryError::ItemCreate)?)
+        .bind(
+            &serde_json::to_string(&item.metadata)
+                .map_err(|e| RepositoryError::ItemCreate(e.to_string()))?,
+        )
         .bind(&item.id)
         .execute(&self.pool)
         .await
-        .map_err(|_| RepositoryError::ItemCreate)?;
+        .map_err(|e| RepositoryError::ItemCreate(e.to_string()))?;
 
         Ok(item)
     }
@@ -80,7 +100,7 @@ impl Repository for ArtistRepository {
             .bind(&id)
             .execute(&self.pool)
             .await
-            .map_err(|_| RepositoryError::ItemCreate)?;
+            .map_err(|e| RepositoryError::ItemCreate(e.to_string()))?;
 
         Ok(())
     }
@@ -111,6 +131,6 @@ impl Repository for ArtistRepository {
         query
             .fetch_all(&self.pool)
             .await
-            .map_err(|_| RepositoryError::ItemRead)
+            .map_err(|e| RepositoryError::ItemRead(e.to_string()))
     }
 }

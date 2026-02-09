@@ -2,12 +2,14 @@ use catalog::{
     model::{CatalogItem, artist::Artist},
     repository::artist::ArtistFilter,
 };
-use tokio::process::Command;
+use std::process::{Child, Command};
+use std::time::Duration;
+use tokio::time::sleep;
 use zbus::Connection;
 
 #[tokio::test]
 async fn test_get_artist() {
-    let server = Command::new("cargo")
+    let _server = Command::new("cargo")
         .args(["run", "--bin", "catalog"])
         .spawn()
         .expect("failed to start server");
@@ -16,38 +18,32 @@ async fn test_get_artist() {
         .await
         .expect("failed to connect to dbus");
 
-    let proxy = zbus::Proxy::new(
-        &connection,
-        "org.boop.artist",
-        "/org/boop/artist",
-        "org.boop.artist",
-    )
-    .await
-    .expect("failed to create dbus proxy");
+    // Wait for service to be ready
+    for _ in 0..50 {
+        let proxy = zbus::Proxy::new(
+            &connection,
+            "org.boop.artist",
+            "/org/boop/artist",
+            "org.boop.artist",
+        )
+        .await
+        .expect("failed to create proxy");
 
-    // List all artists
-    println!("Listing all artists:");
-    let result: Result<Vec<CatalogItem<Artist>>, _> =
-        proxy.call("ListArtists", &(ArtistFilter::default(),)).await;
+        let filter = ArtistFilter::default();
 
-    match result {
-        Ok(artists) => {
-            if artists.is_empty() {
-                println!("  No artists found");
-            }
-            for artist in &artists {
-                println!("  id: {}, metadata: {:?}", artist.id, artist.metadata);
-            }
-        }
-        Err(e) => println!("  Error: {}", e),
+        // Debug: print what signature we're sending
+        println!(
+            "Filter signature: {:?}",
+            <ArtistFilter as zbus::zvariant::Type>::SIGNATURE
+        );
+
+        let result: Result<Vec<CatalogItem<Artist>>, _> =
+            proxy.call("ListArtists", &(filter,)).await;
+
+        println!("Result: {:?}", result);
+
+        sleep(Duration::from_millis(100)).await;
     }
 
-    // Get specific artist
-    println!("\nSearching for 'Beatles':");
-    let result: Result<CatalogItem<Artist>, _> = proxy.call("GetArtist", &("Beatles",)).await;
-
-    match result {
-        Ok(artist) => println!("  Found: id={}, metadata={:?}", artist.id, artist.metadata),
-        Err(e) => println!("  Not found: {}", e),
-    }
+    panic!("service did not start in time");
 }
