@@ -3,8 +3,6 @@ use sqlx::{Row, prelude::FromRow};
 use zvariant::Type;
 
 pub mod artist;
-pub mod release;
-pub mod track;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(bound = "T: Serialize + serde::de::DeserializeOwned")]

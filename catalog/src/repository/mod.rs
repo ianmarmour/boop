@@ -3,8 +3,6 @@ use sqlx::FromRow;
 use thiserror::Error;
 
 pub mod artist;
-pub mod release;
-pub mod track;
 
 pub struct RepositoryPaginatedResponse<T> {
     items: Vec<T>,
