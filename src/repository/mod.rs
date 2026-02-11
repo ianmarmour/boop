@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use zvariant::Type;
 
 use crate::model::CatalogItem;
 
 pub mod artist;
 pub mod release;
+pub mod track;
 
 #[derive(Debug, Error)]
 pub enum RepositoryError {
@@ -18,9 +18,10 @@ pub enum RepositoryError {
 
 #[async_trait]
 pub trait Repository {
-    type Item: Serialize + for<'de> Deserialize<'de> + Type;
-    type Filter: Default + Serialize + for<'de> Deserialize<'de> + Type;
     const TABLE_NAME: &'static str;
+
+    type Item: Serialize + for<'de> Deserialize<'de>;
+    type Filter: Default + Serialize + for<'de> Deserialize<'de>;
 
     async fn setup(&mut self) -> Result<(), RepositoryError>;
     async fn create(

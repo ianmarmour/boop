@@ -1,3 +1,7 @@
+use crate::model::{
+    CatalogItem,
+    track::{self, Track},
+};
 use chrono::DateTime;
 use iced::{
     Alignment::Center,
@@ -5,12 +9,8 @@ use iced::{
     keyboard::Key,
     widget::{Column, Container, Image, container, image, text},
 };
-use model::{
-    CatalogItem,
-    track::{self, Track},
-};
 use symphonia::core::units::Duration;
-const ALBUM_ART_PLACEHOLDER: &[u8] = include_bytes!("../resources/album_art_placeholder.png");
+const ALBUM_ART_PLACEHOLDER: &[u8] = include_bytes!("../resource/album_art_placeholder.png");
 
 #[derive(Debug, Clone)]
 enum NowPlayingState {

@@ -1,18 +1,17 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sqlx::AnyPool;
-use zvariant::Type;
 
 use crate::{
-    model::{CatalogItem, release::Release},
+    model::{CatalogItem, track::Track},
     repository::{Repository, RepositoryError},
 };
 
-pub struct ReleaseRepository {
+pub struct TrackRepository {
     pool: AnyPool,
 }
 
-impl ReleaseRepository {
+impl TrackRepository {
     pub async fn new(pool: AnyPool) -> Result<Self, RepositoryError> {
         let mut repository = Self { pool };
         repository.setup().await?;
@@ -20,17 +19,17 @@ impl ReleaseRepository {
     }
 }
 
-#[derive(Default, Serialize, Deserialize, Type)]
-pub struct ReleaseFilter {
+#[derive(Default, Serialize, Deserialize)]
+pub struct TrackFilter {
     pub name: Option<String>,
-    pub artist: Option<i64>,
 }
 
 #[async_trait]
-impl Repository for ReleaseRepository {
-    type Item = Release;
-    type Filter = ReleaseFilter;
-    const TABLE_NAME: &'static str = "releases";
+impl Repository for TrackRepository {
+    const TABLE_NAME: &'static str = "tracks";
+
+    type Item = Track;
+    type Filter = TrackFilter;
 
     async fn setup(&mut self) -> Result<(), RepositoryError> {
         sqlx::query(&format!(
@@ -42,7 +41,7 @@ impl Repository for ReleaseRepository {
         ))
         .execute(&self.pool)
         .await
-        .expect("failed to create artists table");
+        .expect("failed to create tracks table");
 
         Ok(())
     }
@@ -119,19 +118,12 @@ impl Repository for ReleaseRepository {
             params.push(format!("%{}%", name));
         }
 
-        if let Some(artist) = &filter.artist {
-            conditions.push(format!(
-                "EXISTS (SELECT 1 FROM json_each(metadata->>'artists') WHERE value = ?)"
-            ));
-            params.push(format!("%{}%", artist));
-        }
-
         if !conditions.is_empty() {
             sql.push_str(" WHERE ");
             sql.push_str(&conditions.join(" AND "));
         }
 
-        let mut query = sqlx::query_as::<_, CatalogItem<Release>>(&sql);
+        let mut query = sqlx::query_as::<_, CatalogItem<Track>>(&sql);
         for param in &params {
             query = query.bind(param);
         }

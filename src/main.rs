@@ -1,22 +1,50 @@
-use cpal::{Device, traits::HostTrait};
+use std::sync::Arc;
 
-use crate::application::Application;
+use cpal::{Device, traits::HostTrait};
+use repository::{artist::ArtistRepository, release::ReleaseRepository};
+use sqlx::pool::PoolOptions;
+use tokio::sync::Mutex;
+
 use iced::{Color, Element, Theme};
 
-mod application;
-mod controls;
-mod library;
-mod now_playing;
+use crate::service::{
+    ServiceContext, artist::ArtistService, release::ReleaseService, track::TrackService,
+};
+
+pub mod frontend;
+pub mod model;
+pub mod repository;
+pub mod service;
 
 fn setup_audio_output() -> Option<Device> {
     let host = cpal::default_host();
     host.default_output_device()
 }
 
-fn main() -> iced::Result {
+#[tokio::main]
+async fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
     // First things first the player will need to setup it's audio interfaces and get ready for playback
     let device = setup_audio_output().expect("unable to setup audio device");
+
+    // Setup default database driver for install.
+    sqlx::any::install_default_drivers();
+
+    // Setup our database connection pool to sqlite.
+    let database_pool = PoolOptions::new()
+        .max_connections(5)
+        .connect("sqlite:database.db?mode=rwc")
+        .await
+        .expect("error initializing database");
+
+    // Setup our services context
+    let service_context = ServiceContext::new(database_pool)
+        .await
+        .expect("error initializing service context");
+
+    let artists_service = ArtistService::new(service_context.clone());
+    let release_service = ReleaseService::new(service_context.clone());
+    let track_service = TrackService::new(service_context.clone());
 
     // Grab the top songs from the existing catalog.
 
@@ -40,15 +68,19 @@ fn main() -> iced::Result {
         //let music = FlacReader::try_new(source, options)
     */
 
-    iced::application(Application::new, Application::update, Application::view)
-        .theme(theme)
-        .decorations(false)
-        .antialiasing(true)
-        .subscription(Application::subscription)
-        .run()
+    iced::application(
+        frontend::application::Application::new,
+        frontend::application::Application::update,
+        frontend::application::Application::view,
+    )
+    .theme(theme)
+    .decorations(false)
+    .antialiasing(true)
+    .subscription(frontend::application::Application::subscription)
+    .run()
 }
 
-fn theme(_: &Application) -> Theme {
+fn theme(_: &frontend::application::Application) -> Theme {
     iced::Theme::custom(
         String::from("Custom"),
         iced::theme::Palette {

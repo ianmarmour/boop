@@ -1,13 +1,12 @@
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use sqlx::AnyPool;
-use zvariant::Type;
-
 use crate::{
     model::{CatalogItem, artist::Artist},
     repository::{Repository, RepositoryError},
 };
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use sqlx::AnyPool;
 
+#[derive(Debug, Clone)]
 pub struct ArtistRepository {
     pool: AnyPool,
 }
@@ -20,16 +19,17 @@ impl ArtistRepository {
     }
 }
 
-#[derive(Default, Serialize, Deserialize, Type)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct ArtistFilter {
     pub name: Option<String>,
 }
 
 #[async_trait]
 impl Repository for ArtistRepository {
+    const TABLE_NAME: &'static str = "artists";
+
     type Item = Artist;
     type Filter = ArtistFilter;
-    const TABLE_NAME: &'static str = "artists";
 
     async fn setup(&mut self) -> Result<(), RepositoryError> {
         sqlx::query(&format!(

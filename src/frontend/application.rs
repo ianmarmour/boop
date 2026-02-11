@@ -6,7 +6,7 @@ use iced::{
 };
 use tracing::info;
 
-use crate::{
+use crate::frontend::{
     library::{Library, LibraryMessage},
     now_playing::{NowPlaying, NowPlayingMessage},
 };
@@ -25,7 +25,7 @@ pub enum ApplicationMessage {
     KeyboardInput(Key),
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Application {
     active_view: ApplicationView,
     pub now_playing: NowPlaying,
