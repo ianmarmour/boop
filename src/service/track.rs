@@ -3,7 +3,6 @@ use thiserror::Error;
 use crate::{
     model::{CatalogItem, track::Track},
     repository::{Repository, RepositoryContext, track::TrackFilter},
-    service::ServiceContext,
 };
 
 #[derive(Debug, Error)]
@@ -42,5 +41,18 @@ impl TrackService {
             .first()
             .cloned()
             .ok_or_else(|| TrackServiceError::NotFound)
+    }
+
+    pub async fn list_tracks(
+        &mut self,
+        filter: TrackFilter,
+    ) -> Result<Vec<CatalogItem<Track>>, TrackServiceError> {
+        self.repository_context
+            .track
+            .lock()
+            .await
+            .find(filter)
+            .await
+            .map_err(|e| TrackServiceError::Internal(e.into()))
     }
 }

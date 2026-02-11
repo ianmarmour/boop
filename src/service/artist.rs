@@ -36,6 +36,7 @@ impl ArtistService {
             .await
             .find(ArtistFilter {
                 name: Some(name.to_string()),
+                track: None,
             })
             .await
             .map_err(|e| ArtistServiceError::Internal(e.into()))?;

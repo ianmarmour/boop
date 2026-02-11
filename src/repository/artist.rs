@@ -22,6 +22,7 @@ impl ArtistRepository {
 #[derive(Default, Serialize, Deserialize)]
 pub struct ArtistFilter {
     pub name: Option<String>,
+    pub track: Option<String>,
 }
 
 #[async_trait]
@@ -116,6 +117,11 @@ impl Repository for ArtistRepository {
         if let Some(name) = &filter.name {
             conditions.push("metadata->>'name' LIKE ?".into());
             params.push(format!("%{}%", name));
+        }
+
+        if let Some(artist) = &filter.name {
+            conditions.push("metadata->>'artist' LIKE ?".into());
+            params.push(format!("%{}%", artist));
         }
 
         if !conditions.is_empty() {

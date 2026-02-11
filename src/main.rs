@@ -1,19 +1,9 @@
-use std::sync::Arc;
-
 use cpal::{Device, traits::HostTrait};
-use repository::{artist::ArtistRepository, release::ReleaseRepository};
-use serde::Serialize;
 use sqlx::pool::PoolOptions;
-use tokio::sync::Mutex;
 
-use iced::{Color, Element, Theme};
+use iced::{Color, Theme};
 
-use crate::{
-    repository::RepositoryContext,
-    service::{
-        ServiceContext, artist::ArtistService, release::ReleaseService, track::TrackService,
-    },
-};
+use crate::{repository::RepositoryContext, service::CatalogService};
 
 pub mod frontend;
 pub mod model;
@@ -25,55 +15,37 @@ fn setup_audio_output() -> Option<Device> {
     host.default_output_device()
 }
 
-#[tokio::main]
-async fn main() -> iced::Result {
+fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
-    // First things first the player will need to setup it's audio interfaces and get ready for playback
+
     let device = setup_audio_output().expect("unable to setup audio device");
 
-    // Setup default database driver for install.
-    sqlx::any::install_default_drivers();
+    // Create a runtime just for setup
+    let rt = tokio::runtime::Runtime::new().unwrap();
 
-    // Setup our database connection pool to sqlite.
-    let database_pool = PoolOptions::new()
-        .max_connections(5)
-        .connect("sqlite:database.db?mode=rwc")
-        .await
-        .expect("error initializing database");
+    let catalog_service = rt.block_on(async {
+        sqlx::any::install_default_drivers();
 
-    // Setup our services context
-    let repository_context = RepositoryContext::new(database_pool)
-        .await
-        .expect("error initializing repositories");
+        let database_pool = PoolOptions::new()
+            .max_connections(5)
+            .connect("sqlite:database.db?mode=rwc")
+            .await
+            .expect("error initializing database");
 
-    let service_context = ServiceContext::new(repository_context)
-        .await
-        .expect("error initializing services");
+        let repository_context = RepositoryContext::new(database_pool)
+            .await
+            .expect("error initializing repositories");
 
-    // Grab the top songs from the existing catalog.
+        CatalogService::new(repository_context)
+            .await
+            .expect("error initializing services")
+    });
 
-    // Wait for user input in the UI to select a song and start playback.
-
-    /*
-        let source = std::fs::File::open("path").expect("failed to open media");
-        let stream = MediaSourceStream::new(Box::new(source), Default::default());
-
-        let mut hint = Hint::new();
-
-        let options_metadata: MetadataOptions = Default::default();
-        let options_format: FormatOptions = Default::default();
-
-        let probed = symphonia::default::get_probe()
-            .format(&hint, stream, &options_format, &options_metadata)
-            .expect("unsupported format");
-
-        // Next we will call DBUS to get information about what songs are on our device, the default display will
-        // need be alphabetical.
-        //let music = FlacReader::try_new(source, options)
-    */
+    // Drop the runtime before Iced creates its own
+    drop(rt);
 
     iced::application(
-        move || frontend::application::Application::new(service_context.clone()),
+        move || frontend::application::Application::new(catalog_service.clone()),
         frontend::application::Application::update,
         frontend::application::Application::view,
     )

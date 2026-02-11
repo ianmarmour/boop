@@ -71,7 +71,7 @@ impl NowPlaying {
         let column = column.push(album_art);
 
         let column = match &self.track {
-            Some(track) => column.push(text(track.name.clone())),
+            Some(track) => column.push(text(track.title.clone())),
             None => column,
         };
 
@@ -80,14 +80,5 @@ impl NowPlaying {
             .height(Length::Fill);
 
         container.into()
-    }
-}
-
-async fn load_track(id: u64) -> Track {
-    Track {
-        id: id.to_string(),
-        name: format!("test-track-{}", id).to_string(),
-        artist: 0,
-        release: 0,
     }
 }
