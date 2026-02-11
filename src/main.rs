@@ -2,13 +2,17 @@ use std::sync::Arc;
 
 use cpal::{Device, traits::HostTrait};
 use repository::{artist::ArtistRepository, release::ReleaseRepository};
+use serde::Serialize;
 use sqlx::pool::PoolOptions;
 use tokio::sync::Mutex;
 
 use iced::{Color, Element, Theme};
 
-use crate::service::{
-    ServiceContext, artist::ArtistService, release::ReleaseService, track::TrackService,
+use crate::{
+    repository::RepositoryContext,
+    service::{
+        ServiceContext, artist::ArtistService, release::ReleaseService, track::TrackService,
+    },
 };
 
 pub mod frontend;
@@ -38,13 +42,13 @@ async fn main() -> iced::Result {
         .expect("error initializing database");
 
     // Setup our services context
-    let service_context = ServiceContext::new(database_pool)
+    let repository_context = RepositoryContext::new(database_pool)
         .await
-        .expect("error initializing service context");
+        .expect("error initializing repositories");
 
-    let artists_service = ArtistService::new(service_context.clone());
-    let release_service = ReleaseService::new(service_context.clone());
-    let track_service = TrackService::new(service_context.clone());
+    let service_context = ServiceContext::new(repository_context)
+        .await
+        .expect("error initializing services");
 
     // Grab the top songs from the existing catalog.
 
@@ -69,7 +73,7 @@ async fn main() -> iced::Result {
     */
 
     iced::application(
-        frontend::application::Application::new,
+        move || frontend::application::Application::new(service_context.clone()),
         frontend::application::Application::update,
         frontend::application::Application::view,
     )

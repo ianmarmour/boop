@@ -1,8 +1,15 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use sqlx::AnyPool;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
-use crate::model::CatalogItem;
+use crate::{
+    model::CatalogItem,
+    repository::{artist::ArtistRepository, release::ReleaseRepository, track::TrackRepository},
+};
 
 pub mod artist;
 pub mod release;
@@ -38,4 +45,21 @@ pub trait Repository {
         &self,
         filter: Self::Filter,
     ) -> Result<Vec<CatalogItem<Self::Item>>, RepositoryError>;
+}
+
+#[derive(Debug, Clone)]
+pub struct RepositoryContext {
+    pub artist: Arc<Mutex<ArtistRepository>>,
+    pub release: Arc<Mutex<ReleaseRepository>>,
+    pub track: Arc<Mutex<TrackRepository>>,
+}
+
+impl RepositoryContext {
+    pub async fn new(pool: AnyPool) -> Result<Self, RepositoryError> {
+        Ok(Self {
+            artist: Arc::new(Mutex::new(ArtistRepository::new(pool.clone()).await?)),
+            release: Arc::new(Mutex::new(ReleaseRepository::new(pool.clone()).await?)),
+            track: Arc::new(Mutex::new(TrackRepository::new(pool.clone()).await?)),
+        })
+    }
 }

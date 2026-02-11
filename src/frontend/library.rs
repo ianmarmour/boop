@@ -1,6 +1,10 @@
 use std::{fmt::Debug, slice};
 
-use crate::model::{CatalogItem, CatalogItemKind, artist::Artist, release::Release, track::Track};
+use crate::{
+    model::{CatalogItem, CatalogItemKind, artist::Artist, release::Release, track::Track},
+    repository::artist::ArtistFilter,
+    service::ServiceContext,
+};
 use iced::{
     Background, Color, Element, Length, Task, Theme,
     futures::FutureExt,
@@ -95,10 +99,12 @@ impl LibraryItem {
 
 #[derive(Debug, Clone)]
 pub enum LibraryMessage {
+    Loaded(Vec<LibraryItem>),
     TrackSelect(Track),
     ItemRefresh(Vec<CatalogItemKind>),
     ItemLoad(Option<LibraryItem>),
     InputEvent(Key),
+    Error(String),
 }
 
 #[derive(Debug, Clone)]
@@ -192,36 +198,46 @@ impl<'a> IntoIterator for &'a LibraryItems {
 
 #[derive(Debug, Clone)]
 pub struct Library {
+    service_context: ServiceContext,
     items: LibraryItems,
 }
 
-impl Default for Library {
-    fn default() -> Self {
-        let items = vec![LibraryItem {
-            id: 012345,
-            catalog_item: CatalogItemKind::Artist(Artist {
-                id: 012345,
-                name: "test-artist".to_string(),
-                releases: vec![0, 1, 2, 3, 4, 5],
-            }),
-            selected: false,
-        }];
-
-        Library {
-            items: LibraryItems::new(items),
-        }
-    }
-}
-
 impl Library {
-    pub fn new(items: Vec<LibraryItem>) -> Library {
-        Library {
-            items: LibraryItems::new(items),
-        }
+    pub fn new(service_context: ServiceContext) -> (Library, Task<LibraryMessage>) {
+        let library = Library {
+            service_context: service_context.clone(),
+            items: LibraryItems::new(vec![]),
+        };
+
+        let task = Task::perform(
+            async move {
+                service_context
+                    .artist
+                    .lock()
+                    .await
+                    .list_artists(ArtistFilter::default())
+                    .await
+            },
+            |result| match result {
+                Ok(items) => LibraryMessage::Loaded(
+                    items
+                        .into_iter()
+                        .map(|ci| LibraryItem::new(CatalogItemKind::Artist(ci.metadata)))
+                        .collect(),
+                ),
+                Err(e) => LibraryMessage::Error(e.to_string()),
+            },
+        );
+
+        (library, task)
     }
 
     pub fn update(&mut self, message: LibraryMessage) -> Task<LibraryMessage> {
         match message {
+            LibraryMessage::Loaded(items) => {
+                self.items = LibraryItems::new(items);
+                Task::none()
+            }
             LibraryMessage::ItemLoad(item) => match item {
                 Some(library_item) => match library_item.catalog_item {
                     CatalogItemKind::Artist(a) => {
@@ -296,6 +312,7 @@ impl Library {
             LibraryMessage::TrackSelect(track) => {
                 todo!()
             }
+            LibraryMessage::Error(_) => todo!(),
         }
     }
 

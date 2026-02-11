@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::{
     model::{CatalogItem, track::Track},
-    repository::{Repository, track::TrackFilter},
+    repository::{Repository, RepositoryContext, track::TrackFilter},
     service::ServiceContext,
 };
 
@@ -14,21 +14,22 @@ pub enum TrackServiceError {
     Internal(#[from] anyhow::Error),
 }
 
+#[derive(Debug, Clone)]
 pub struct TrackService {
-    context: ServiceContext,
+    repository_context: RepositoryContext,
 }
 
 impl TrackService {
-    pub fn new(context: ServiceContext) -> TrackService {
-        Self { context }
+    pub fn new(repository_context: RepositoryContext) -> TrackService {
+        Self { repository_context }
     }
 }
 
 impl TrackService {
-    async fn get_track(&mut self, name: &str) -> Result<CatalogItem<Track>, TrackServiceError> {
+    pub async fn get_track(&mut self, name: &str) -> Result<CatalogItem<Track>, TrackServiceError> {
         let tracks = self
-            .context
-            .tracks
+            .repository_context
+            .track
             .lock()
             .await
             .find(TrackFilter {

@@ -85,7 +85,7 @@ impl NowPlaying {
 
 async fn load_track(id: u64) -> Track {
     Track {
-        id: id.clone(),
+        id: id.to_string(),
         name: format!("test-track-{}", id).to_string(),
         artist: 0,
         release: 0,

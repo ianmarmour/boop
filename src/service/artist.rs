@@ -2,8 +2,7 @@ use thiserror::Error;
 
 use crate::{
     model::{CatalogItem, artist::Artist},
-    repository::{Repository, artist::ArtistFilter},
-    service::ServiceContext,
+    repository::{Repository, RepositoryContext, artist::ArtistFilter},
 };
 
 #[derive(Debug, Error)]
@@ -14,21 +13,25 @@ pub enum ArtistServiceError {
     Internal(#[from] anyhow::Error),
 }
 
+#[derive(Debug, Clone)]
 pub struct ArtistService {
-    context: ServiceContext,
+    repository_context: RepositoryContext,
 }
 
 impl ArtistService {
-    pub fn new(context: ServiceContext) -> ArtistService {
-        Self { context }
+    pub fn new(repository_context: RepositoryContext) -> ArtistService {
+        Self { repository_context }
     }
 }
 
 impl ArtistService {
-    async fn get_artist(&mut self, name: &str) -> Result<CatalogItem<Artist>, ArtistServiceError> {
+    pub async fn get_artist(
+        &mut self,
+        name: &str,
+    ) -> Result<CatalogItem<Artist>, ArtistServiceError> {
         let artists = self
-            .context
-            .artists
+            .repository_context
+            .artist
             .lock()
             .await
             .find(ArtistFilter {
@@ -43,12 +46,12 @@ impl ArtistService {
             .ok_or_else(|| ArtistServiceError::NotFound)
     }
 
-    async fn list_artists(
+    pub async fn list_artists(
         &mut self,
         filter: ArtistFilter,
     ) -> Result<Vec<CatalogItem<Artist>>, ArtistServiceError> {
-        self.context
-            .artists
+        self.repository_context
+            .artist
             .lock()
             .await
             .find(filter)

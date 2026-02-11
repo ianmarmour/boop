@@ -6,9 +6,12 @@ use iced::{
 };
 use tracing::info;
 
-use crate::frontend::{
-    library::{Library, LibraryMessage},
-    now_playing::{NowPlaying, NowPlayingMessage},
+use crate::{
+    frontend::{
+        library::{Library, LibraryMessage},
+        now_playing::{NowPlaying, NowPlayingMessage},
+    },
+    service::ServiceContext,
 };
 
 #[derive(Default, Debug, Clone)]
@@ -27,18 +30,27 @@ pub enum ApplicationMessage {
 
 #[derive(Debug, Clone)]
 pub struct Application {
+    service_context: ServiceContext,
     active_view: ApplicationView,
     pub now_playing: NowPlaying,
     pub library: Library,
 }
 
 impl Application {
-    pub fn new() -> Application {
-        Application {
+    pub fn new(service_context: ServiceContext) -> (Application, Task<ApplicationMessage>) {
+        let (library, library_task) = Library::new(service_context.clone());
+
+        let application = Application {
+            service_context: service_context.clone(),
             active_view: ApplicationView::default(),
             now_playing: NowPlaying::default(),
-            library: Library::default(),
-        }
+            library,
+        };
+
+        (
+            application,
+            library_task.map(ApplicationMessage::LibraryMessage),
+        )
     }
 
     pub fn view(&self) -> Element<ApplicationMessage> {

@@ -7,6 +7,7 @@ use crate::{
     repository::{Repository, RepositoryError},
 };
 
+#[derive(Debug, Clone)]
 pub struct TrackRepository {
     pool: AnyPool,
 }

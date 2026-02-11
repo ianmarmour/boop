@@ -2,8 +2,7 @@ use thiserror::Error;
 
 use crate::{
     model::{CatalogItem, release::Release},
-    repository::{Repository, release::ReleaseFilter},
-    service::ServiceContext,
+    repository::{Repository, RepositoryContext, release::ReleaseFilter},
 };
 
 #[derive(Debug, Error)]
@@ -14,24 +13,25 @@ pub enum ReleaseServiceError {
     Internal(#[from] anyhow::Error),
 }
 
+#[derive(Debug, Clone)]
 pub struct ReleaseService {
-    context: ServiceContext,
+    repository_context: RepositoryContext,
 }
 
 impl ReleaseService {
-    pub fn new(context: ServiceContext) -> ReleaseService {
-        Self { context }
+    pub fn new(repository_context: RepositoryContext) -> ReleaseService {
+        Self { repository_context }
     }
 }
 
 impl ReleaseService {
-    async fn get_release(
+    pub async fn get_release(
         &mut self,
         name: &str,
     ) -> Result<CatalogItem<Release>, ReleaseServiceError> {
         let releases = self
-            .context
-            .releases
+            .repository_context
+            .release
             .lock()
             .await
             .find(ReleaseFilter {
@@ -47,12 +47,12 @@ impl ReleaseService {
             .ok_or_else(|| ReleaseServiceError::NotFound)
     }
 
-    async fn list_releases(
+    pub async fn list_releases(
         &mut self,
         filter: ReleaseFilter,
     ) -> Result<Vec<CatalogItem<Release>>, ReleaseServiceError> {
-        self.context
-            .releases
+        self.repository_context
+            .release
             .lock()
             .await
             .find(filter)
