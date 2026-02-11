@@ -26,6 +26,7 @@ impl ReleaseService {
             .await
             .find(ReleaseFilter {
                 name: Some(name.to_string()),
+                artist: None,
             })
             .await
             .map_err(|e| Error::Failed(e.to_string()))?;

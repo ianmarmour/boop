@@ -23,6 +23,7 @@ impl ReleaseRepository {
 #[derive(Default, Serialize, Deserialize, Type)]
 pub struct ReleaseFilter {
     pub name: Option<String>,
+    pub artist: Option<i64>,
 }
 
 #[async_trait]
@@ -116,6 +117,13 @@ impl Repository for ReleaseRepository {
         if let Some(name) = &filter.name {
             conditions.push("metadata->>'name' LIKE ?".into());
             params.push(format!("%{}%", name));
+        }
+
+        if let Some(artist) = &filter.artist {
+            conditions.push(format!(
+                "EXISTS (SELECT 1 FROM json_each(metadata->>'artists') WHERE value = ?)"
+            ));
+            params.push(format!("%{}%", artist));
         }
 
         if !conditions.is_empty() {
