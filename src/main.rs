@@ -7,6 +7,7 @@ use iced::{Color, Theme};
 
 use crate::{repository::RepositoryContext, service::CatalogService};
 
+pub mod audio;
 pub mod frontend;
 pub mod model;
 pub mod repository;
@@ -42,7 +43,9 @@ fn main() -> iced::Result {
             .await
             .expect("error initializing services");
 
-        let _ = service.sync(PathBuf::from("/test-audio/")).await;
+        let _ = service
+            .sync(PathBuf::from("/Users/ian/Desktop/music"))
+            .await;
 
         return service;
     });

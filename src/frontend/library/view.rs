@@ -37,7 +37,7 @@ impl LibraryItem {
             let palette = theme.extended_palette();
 
             let background = match self.selected {
-                true => Some(Background::Color(Color::BLACK)),
+                true => Some(Background::Color(palette.background.neutral.color)),
                 false => Some(Background::Color(Color::TRANSPARENT)),
             };
 

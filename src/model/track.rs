@@ -24,6 +24,7 @@ pub struct Track {
     pub title: String,
     pub release: Option<String>,
     pub artist: Option<String>,
+    pub path: PathBuf,
 }
 
 impl Track {
@@ -62,6 +63,12 @@ impl Track {
             title: title.ok_or_else(|| TrackError::TagMissing)?,
             artist: Some(artist.ok_or_else(|| TrackError::TagMissing)?),
             release: Some(album.ok_or_else(|| TrackError::TagMissing)?),
+            path,
         })
+    }
+
+    pub fn open(&self) -> Result<MediaSourceStream, TrackError> {
+        let file = File::open(&self.path).map_err(|_| TrackError::Unknown)?;
+        Ok(MediaSourceStream::new(Box::new(file), Default::default()))
     }
 }

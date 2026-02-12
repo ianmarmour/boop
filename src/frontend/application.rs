@@ -8,8 +8,8 @@ use tracing::info;
 
 use crate::{
     frontend::{
-        library::{Library, LibraryMessage},
-        now_playing::{NowPlaying, NowPlayingMessage},
+        library::view::{Library, LibraryMessage},
+        player::{Player, PlayerMessage},
     },
     service::CatalogService,
 };
@@ -18,20 +18,19 @@ use crate::{
 pub enum ApplicationView {
     #[default]
     Library,
-    NowPlaying,
+    Player,
 }
 
 #[derive(Debug, Clone)]
 pub enum ApplicationMessage {
-    LibraryMessage(LibraryMessage),
-    NowPlaying(NowPlayingMessage),
-    KeyboardInput(Key),
+    Library(LibraryMessage),
+    Player(PlayerMessage),
+    Input(Key),
 }
 
-#[derive(Debug, Clone)]
 pub struct Application {
-    active_view: ApplicationView,
-    pub now_playing: NowPlaying,
+    current_view: ApplicationView,
+    pub player: Player,
     pub library: Library,
 }
 
@@ -40,23 +39,18 @@ impl Application {
         let (library, library_task) = Library::new(catalog.clone());
 
         let application = Application {
-            active_view: ApplicationView::default(),
-            now_playing: NowPlaying::default(),
+            current_view: ApplicationView::default(),
+            player: Player::default(),
             library: library,
         };
 
-        (
-            application,
-            library_task.map(ApplicationMessage::LibraryMessage),
-        )
+        (application, library_task.map(ApplicationMessage::Library))
     }
 
     pub fn view(&self) -> Element<ApplicationMessage> {
-        let view_element = match self.active_view {
-            ApplicationView::Library => self.library.view().map(ApplicationMessage::LibraryMessage),
-            ApplicationView::NowPlaying => {
-                self.now_playing.view().map(ApplicationMessage::NowPlaying)
-            }
+        let view_element = match self.current_view {
+            ApplicationView::Library => self.library.view().map(ApplicationMessage::Library),
+            ApplicationView::Player => self.player.view().map(ApplicationMessage::Player),
         };
 
         container(view_element)
@@ -75,33 +69,29 @@ impl Application {
 
     pub fn update(&mut self, message: ApplicationMessage) -> Task<ApplicationMessage> {
         match message {
-            ApplicationMessage::LibraryMessage(message) => match message {
+            ApplicationMessage::Library(message) => match message {
                 LibraryMessage::TrackSelect(track) => {
-                    self.now_playing = NowPlaying::new(track);
-                    self.active_view = ApplicationView::NowPlaying;
-                    Task::none()
+                    self.current_view = ApplicationView::Player;
+                    Task::done(ApplicationMessage::Player(PlayerMessage::Load(track)))
                 }
-                other => self
-                    .library
-                    .update(other)
-                    .map(ApplicationMessage::LibraryMessage),
+                other => self.library.update(other).map(ApplicationMessage::Library),
             },
-            ApplicationMessage::KeyboardInput(key) => match self.active_view {
+            ApplicationMessage::Input(key) => match self.current_view {
                 ApplicationView::Library => self
                     .library
                     .update(LibraryMessage::InputEvent(key))
-                    .map(ApplicationMessage::LibraryMessage),
-                ApplicationView::NowPlaying => match key {
+                    .map(ApplicationMessage::Library),
+                ApplicationView::Player => match key {
                     Key::Named(keyboard::key::Named::Backspace) => {
-                        self.active_view = ApplicationView::Library;
-                        info!("library: {:?}", self.library);
-
+                        self.current_view = ApplicationView::Library;
                         Task::none()
                     }
                     _ => Task::none(),
                 },
             },
-            ApplicationMessage::NowPlaying(_) => todo!(),
+            ApplicationMessage::Player(message) => {
+                self.player.update(message).map(ApplicationMessage::Player)
+            }
         }
     }
 
@@ -118,7 +108,7 @@ impl Application {
                     modifiers,
                     text,
                     repeat,
-                } => Some(ApplicationMessage::KeyboardInput(key)),
+                } => Some(ApplicationMessage::Input(key)),
                 _ => None,
             }
         })
