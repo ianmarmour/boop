@@ -16,8 +16,10 @@ pub mod artist;
 pub mod release;
 pub mod track;
 
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Error)]
 pub enum CatalogServiceError {
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
     #[error("unknown error occured")]
     Unknown,
 }
@@ -46,12 +48,12 @@ impl CatalogService {
         while let Some(dir) = dirs.pop() {
             let mut entries = tokio::fs::read_dir(dir)
                 .await
-                .map_err(|_| CatalogServiceError::Unknown)?;
+                .map_err(|e| CatalogServiceError::Internal(e.into()))?;
 
             while let Some(entry) = entries
                 .next_entry()
                 .await
-                .map_err(|_| CatalogServiceError::Unknown)?
+                .map_err(|e| CatalogServiceError::Internal(e.into()))?
             {
                 let path = entry.path();
                 if path.is_dir() {

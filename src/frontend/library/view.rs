@@ -168,8 +168,10 @@ impl<'a> IntoIterator for &'a LibraryItems {
     }
 }
 
-#[derive(Debug, Clone, Error)]
+#[derive(Debug, Error)]
 pub enum LibraryError {
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
     #[error("unknown error occured")]
     Unknown,
 }
@@ -272,7 +274,7 @@ impl Library {
                                         release: Some(release.title),
                                     })
                                     .await
-                                    .map_err(|_| LibraryError::Unknown)?;
+                                    .map_err(|e| LibraryError::Internal(e.into()))?;
 
                                 Ok::<Vec<CatalogItem<CatalogMetadata>>, LibraryError>(
                                     tracks.into_iter().map(Into::into).collect(),
@@ -294,7 +296,7 @@ impl Library {
                             .await
                             .list_artists(ArtistFilter::default())
                             .await
-                            .map_err(|_| LibraryError::Unknown)?;
+                            .map_err(|e| LibraryError::Internal(e.into()))?;
 
                         Ok::<Vec<CatalogItem<CatalogMetadata>>, LibraryError>(
                             releases.into_iter().map(Into::into).collect(),
@@ -345,7 +347,7 @@ impl Library {
                                             .await
                                             .get_artist(&name)
                                             .await
-                                            .map_err(|_| LibraryError::Unknown)?;
+                                            .map_err(|e| LibraryError::Internal(e.into()))?;
                                         Ok::<CatalogItem<CatalogMetadata>, LibraryError>(
                                             item.into(),
                                         )
@@ -368,7 +370,7 @@ impl Library {
                                             .await
                                             .get_release(&title)
                                             .await
-                                            .map_err(|_| LibraryError::Unknown)?;
+                                            .map_err(|e| LibraryError::Internal(e.into()))?;
                                         Ok::<CatalogItem<CatalogMetadata>, LibraryError>(
                                             item.into(),
                                         )
@@ -398,7 +400,7 @@ impl Library {
                                                 track: None,
                                             })
                                             .await
-                                            .map_err(|_| LibraryError::Unknown)?;
+                                            .map_err(|e| LibraryError::Internal(e.into()))?;
 
                                         Ok::<Vec<CatalogItem<Artist>>, LibraryError>(items)
                                     },
@@ -454,7 +456,8 @@ impl Library {
             }
             LibraryMessage::Error(test) => {
                 info!(test);
-                todo!()
+                Task::none()
+                //todo!()
             }
         }
     }

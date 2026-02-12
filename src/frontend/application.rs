@@ -96,22 +96,25 @@ impl Application {
     }
 
     pub fn subscription(&self) -> iced::Subscription<ApplicationMessage> {
-        keyboard::listen().filter_map(|event| {
-            info!("keyboard subscribed key event detected: {:?}", event);
+        iced::Subscription::batch([
+            keyboard::listen().filter_map(|event| {
+                info!("keyboard subscribed key event detected: {:?}", event);
 
-            match event {
-                keyboard::Event::KeyPressed {
-                    key,
-                    modified_key,
-                    physical_key,
-                    location,
-                    modifiers,
-                    text,
-                    repeat,
-                } => Some(ApplicationMessage::Input(key)),
-                _ => None,
-            }
-        })
+                match event {
+                    keyboard::Event::KeyPressed {
+                        key,
+                        modified_key,
+                        physical_key,
+                        location,
+                        modifiers,
+                        text,
+                        repeat,
+                    } => Some(ApplicationMessage::Input(key)),
+                    _ => None,
+                }
+            }),
+            self.player.subscription().map(ApplicationMessage::Player),
+        ])
     }
 }
 
