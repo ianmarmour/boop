@@ -27,7 +27,7 @@ impl ReleaseService {
 impl ReleaseService {
     pub async fn get_release(
         &mut self,
-        name: &str,
+        title: &str,
     ) -> Result<CatalogItem<Release>, ReleaseServiceError> {
         let releases = self
             .repository_context
@@ -35,7 +35,7 @@ impl ReleaseService {
             .lock()
             .await
             .find(ReleaseFilter {
-                name: Some(name.to_string()),
+                title: Some(title.to_string()),
                 artist: None,
             })
             .await

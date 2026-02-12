@@ -1,7 +1,7 @@
 use std::{fmt::Debug, slice};
 
 use crate::{
-    model::{CatalogItem, CatalogMetadata, track::Track},
+    model::{CatalogItem, CatalogMetadata, artist::Artist, release::Release, track::Track},
     repository::{artist::ArtistFilter, release::ReleaseFilter, track::TrackFilter},
     service::CatalogService,
 };
@@ -231,44 +231,59 @@ impl Library {
             }
             LibraryMessage::ItemLoad(item) => match item {
                 Some(library_item) => match library_item.catalog_item.metadata {
-                    CatalogMetadata::Artist(a) => Task::perform(
-                        async move {
-                            let releases = catalog
-                                .release
-                                .lock()
-                                .await
-                                .list_releases(ReleaseFilter::default())
-                                .await
-                                .map_err(|_| LibraryError::Unknown)?;
+                    CatalogMetadata::Artist(a) => {
+                        let artist = a.clone();
 
-                            Ok::<Vec<CatalogItem<CatalogMetadata>>, LibraryError>(
-                                releases.into_iter().map(Into::into).collect(),
-                            )
-                        },
-                        |result| match result {
-                            Ok(items) => LibraryMessage::ItemRefresh(items),
-                            Err(e) => LibraryMessage::Error(e.to_string()),
-                        },
-                    ),
-                    CatalogMetadata::Release(r) => Task::perform(
-                        async move {
-                            let tracks = catalog
-                                .track
-                                .lock()
-                                .await
-                                .list_tracks(TrackFilter::default())
-                                .await
-                                .map_err(|_| LibraryError::Unknown)?;
+                        Task::perform(
+                            async move {
+                                let releases = catalog
+                                    .release
+                                    .lock()
+                                    .await
+                                    .list_releases(ReleaseFilter {
+                                        title: None,
+                                        artist: Some(artist.name),
+                                    })
+                                    .await
+                                    .map_err(|_| LibraryError::Unknown)?;
 
-                            Ok::<Vec<CatalogItem<CatalogMetadata>>, LibraryError>(
-                                tracks.into_iter().map(Into::into).collect(),
-                            )
-                        },
-                        |result| match result {
-                            Ok(items) => LibraryMessage::ItemRefresh(items),
-                            Err(e) => LibraryMessage::Error(e.to_string()),
-                        },
-                    ),
+                                Ok::<Vec<CatalogItem<CatalogMetadata>>, LibraryError>(
+                                    releases.into_iter().map(Into::into).collect(),
+                                )
+                            },
+                            |result| match result {
+                                Ok(items) => LibraryMessage::ItemRefresh(items),
+                                Err(e) => LibraryMessage::Error(e.to_string()),
+                            },
+                        )
+                    }
+                    CatalogMetadata::Release(r) => {
+                        let release = r.clone();
+
+                        Task::perform(
+                            async move {
+                                let tracks = catalog
+                                    .track
+                                    .lock()
+                                    .await
+                                    .list_tracks(TrackFilter {
+                                        name: None,
+                                        artist: release.artist,
+                                        release: Some(release.title),
+                                    })
+                                    .await
+                                    .map_err(|_| LibraryError::Unknown)?;
+
+                                Ok::<Vec<CatalogItem<CatalogMetadata>>, LibraryError>(
+                                    tracks.into_iter().map(Into::into).collect(),
+                                )
+                            },
+                            |result| match result {
+                                Ok(items) => LibraryMessage::ItemRefresh(items),
+                                Err(e) => LibraryMessage::Error(e.to_string()),
+                            },
+                        )
+                    }
                     _ => Task::none(),
                 },
                 None => Task::perform(
@@ -372,48 +387,63 @@ impl Library {
                     Key::Named(iced::keyboard::key::Named::Backspace) => {
                         match self.items.selected() {
                             Some(item) => match &item.catalog_item.metadata {
-                                CatalogMetadata::Release(r) => {
-                                    Task::done(LibraryMessage::ItemLoad(None))
-                                }
-                                CatalogMetadata::Track(t) => {
-                                    let Some(catalog) = self.catalog.clone() else {
-                                        return Task::done(LibraryMessage::Error(
-                                            "No catalog".into(),
-                                        ));
-                                    };
-                                    let track_title = t.title.clone(); // Clone data you need
+                                CatalogMetadata::Release(_) => Task::perform(
+                                    async move {
+                                        let items = catalog
+                                            .artist
+                                            .lock()
+                                            .await
+                                            .list_artists(ArtistFilter {
+                                                name: None,
+                                                track: None,
+                                            })
+                                            .await
+                                            .map_err(|_| LibraryError::Unknown)?;
 
+                                        Ok::<Vec<CatalogItem<Artist>>, LibraryError>(items)
+                                    },
+                                    |result| match result {
+                                        Ok(item) => LibraryMessage::ItemsLoad(
+                                            item.iter()
+                                                .map(|i| LibraryItem::new(i.to_owned().into()))
+                                                .collect(),
+                                        ),
+                                        Err(e) => LibraryMessage::Error(e.to_string()),
+                                    },
+                                ),
+                                CatalogMetadata::Track(t) => {
+                                    let track = t.clone();
                                     Task::perform(
                                         async move {
-                                            let item = catalog
-                                                .artist
+                                            let items = catalog
+                                                .release
                                                 .lock()
                                                 .await
-                                                .list_artists(ArtistFilter {
-                                                    name: None,
-                                                    track: Some(track_title),
+                                                .list_releases(ReleaseFilter {
+                                                    title: None,
+                                                    artist: track.artist,
                                                 })
                                                 .await
-                                                .map_err(|_| LibraryError::Unknown)?
-                                                .into_iter()
-                                                .next()
-                                                .ok_or(LibraryError::Unknown)?;
+                                                .map_err(|_| LibraryError::Unknown)?;
 
-                                            Ok::<CatalogItem<CatalogMetadata>, LibraryError>(
-                                                item.into(),
-                                            )
+                                            Ok::<Vec<CatalogItem<Release>>, LibraryError>(items)
                                         },
                                         |result| match result {
-                                            Ok(item) => LibraryMessage::ItemLoad(Some(
-                                                LibraryItem::new(item),
-                                            )),
+                                            Ok(item) => LibraryMessage::ItemsLoad(
+                                                item.iter()
+                                                    .map(|i| LibraryItem::new(i.to_owned().into()))
+                                                    .collect(),
+                                            ),
                                             Err(e) => LibraryMessage::Error(e.to_string()),
                                         },
                                     )
                                 }
                                 _ => Task::none(),
                             },
-                            None => todo!(),
+                            None => {
+                                self.items.select(LibraryItemAction::SelectNext);
+                                Task::none()
+                            }
                         }
                     }
                     _ => Task::none(),
@@ -422,7 +452,10 @@ impl Library {
             LibraryMessage::TrackSelect(track) => {
                 todo!()
             }
-            LibraryMessage::Error(_) => todo!(),
+            LibraryMessage::Error(test) => {
+                info!(test);
+                todo!()
+            }
         }
     }
 

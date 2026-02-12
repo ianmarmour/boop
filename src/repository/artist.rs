@@ -112,16 +112,18 @@ impl Repository for ArtistRepository {
     ) -> Result<Vec<CatalogItem<Self::Item>>, RepositoryError> {
         let mut sql = format!("SELECT id, metadata FROM {}", Self::TABLE_NAME);
         let mut conditions: Vec<String> = Vec::new();
-        let mut params: Vec<String> = Vec::new();
 
-        if let Some(name) = &filter.name {
+        if filter.name.is_some() {
             conditions.push("metadata->>'name' LIKE ?".into());
-            params.push(format!("%{}%", name));
         }
-
-        if let Some(artist) = &filter.name {
-            conditions.push("metadata->>'artist' LIKE ?".into());
-            params.push(format!("%{}%", artist));
+        if filter.track.is_some() {
+            conditions.push(
+                "EXISTS (
+                    SELECT 1 FROM json_each(metadata, '$.tracks')
+                    WHERE CAST(json_each.value AS INTEGER) = ?
+                )"
+                .into(),
+            );
         }
 
         if !conditions.is_empty() {
@@ -129,9 +131,13 @@ impl Repository for ArtistRepository {
             sql.push_str(&conditions.join(" AND "));
         }
 
-        let mut query = sqlx::query_as::<_, CatalogItem<Artist>>(&sql);
-        for param in &params {
-            query = query.bind(param);
+        let mut query = sqlx::query_as::<_, CatalogItem<Self::Item>>(&sql);
+
+        if let Some(name) = &filter.name {
+            query = query.bind(format!("%{}%", name));
+        }
+        if let Some(track_id) = &filter.track {
+            query = query.bind(track_id);
         }
 
         query

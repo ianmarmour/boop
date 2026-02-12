@@ -23,6 +23,8 @@ impl TrackRepository {
 #[derive(Default, Serialize, Deserialize)]
 pub struct TrackFilter {
     pub name: Option<String>,
+    pub release: Option<String>,
+    pub artist: Option<String>,
 }
 
 #[async_trait]
@@ -42,7 +44,20 @@ impl Repository for TrackRepository {
         ))
         .execute(&self.pool)
         .await
-        .expect("failed to create tracks table");
+        .map_err(|_| RepositoryError::Setup)?;
+
+        sqlx::query(&format!(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_{}_unique ON {}(
+                (metadata->>'title'),
+                (metadata->>'artist'),
+                (metadata->>'release')
+            )",
+            Self::TABLE_NAME,
+            Self::TABLE_NAME
+        ))
+        .execute(&self.pool)
+        .await
+        .map_err(|_| RepositoryError::Setup)?;
 
         Ok(())
     }
@@ -112,11 +127,15 @@ impl Repository for TrackRepository {
     ) -> Result<Vec<CatalogItem<Self::Item>>, RepositoryError> {
         let mut sql = format!("SELECT id, metadata FROM {}", Self::TABLE_NAME);
         let mut conditions: Vec<String> = Vec::new();
-        let mut params: Vec<String> = Vec::new();
 
-        if let Some(name) = &filter.name {
+        if filter.name.is_some() {
             conditions.push("metadata->>'name' LIKE ?".into());
-            params.push(format!("%{}%", name));
+        }
+        if filter.artist.is_some() {
+            conditions.push("metadata->>'artist' LIKE ?".into());
+        }
+        if filter.release.is_some() {
+            conditions.push("metadata->>'release' LIKE ?".into());
         }
 
         if !conditions.is_empty() {
@@ -124,9 +143,16 @@ impl Repository for TrackRepository {
             sql.push_str(&conditions.join(" AND "));
         }
 
-        let mut query = sqlx::query_as::<_, CatalogItem<Track>>(&sql);
-        for param in &params {
-            query = query.bind(param);
+        let mut query = sqlx::query_as::<_, CatalogItem<Self::Item>>(&sql);
+
+        if let Some(name) = &filter.name {
+            query = query.bind(format!("%{}%", name));
+        }
+        if let Some(artist) = &filter.artist {
+            query = query.bind(format!("%{}%", artist));
+        }
+        if let Some(release) = &filter.release {
+            query = query.bind(format!("%{}%", release));
         }
 
         query

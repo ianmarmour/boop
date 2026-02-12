@@ -17,6 +17,8 @@ pub mod track;
 
 #[derive(Debug, Error)]
 pub enum RepositoryError {
+    #[error("unable to setup repository")]
+    Setup,
     #[error("unable to create item: {0}")]
     ItemCreate(String),
     #[error("unable to read item: {0}")]

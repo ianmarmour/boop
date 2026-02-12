@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use cpal::{Device, traits::HostTrait};
 use sqlx::pool::PoolOptions;
 
@@ -36,9 +38,13 @@ fn main() -> iced::Result {
             .await
             .expect("error initializing repositories");
 
-        CatalogService::new(repository_context)
+        let service = CatalogService::new(repository_context)
             .await
-            .expect("error initializing services")
+            .expect("error initializing services");
+
+        let _ = service.sync(PathBuf::from("/test-audio/")).await;
+
+        return service;
     });
 
     // Drop the runtime before Iced creates its own

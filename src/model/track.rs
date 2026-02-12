@@ -22,8 +22,8 @@ pub enum TrackError {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Track {
     pub title: String,
-    pub release: String,
-    pub artist: String,
+    pub release: Option<String>,
+    pub artist: Option<String>,
 }
 
 impl Track {
@@ -60,8 +60,8 @@ impl Track {
 
         Ok(Track {
             title: title.ok_or_else(|| TrackError::TagMissing)?,
-            artist: artist.ok_or_else(|| TrackError::TagMissing)?,
-            release: album.ok_or_else(|| TrackError::TagMissing)?,
+            artist: Some(artist.ok_or_else(|| TrackError::TagMissing)?),
+            release: Some(album.ok_or_else(|| TrackError::TagMissing)?),
         })
     }
 }

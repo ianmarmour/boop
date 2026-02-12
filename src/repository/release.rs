@@ -22,8 +22,8 @@ impl ReleaseRepository {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct ReleaseFilter {
-    pub name: Option<String>,
-    pub artist: Option<i64>,
+    pub title: Option<String>,
+    pub artist: Option<String>,
 }
 
 #[async_trait]
@@ -113,18 +113,12 @@ impl Repository for ReleaseRepository {
     ) -> Result<Vec<CatalogItem<Self::Item>>, RepositoryError> {
         let mut sql = format!("SELECT id, metadata FROM {}", Self::TABLE_NAME);
         let mut conditions: Vec<String> = Vec::new();
-        let mut params: Vec<String> = Vec::new();
 
-        if let Some(name) = &filter.name {
-            conditions.push("metadata->>'name' LIKE ?".into());
-            params.push(format!("%{}%", name));
+        if filter.title.is_some() {
+            conditions.push("metadata->>'title' LIKE ?".into());
         }
-
-        if let Some(artist) = &filter.artist {
-            conditions.push(format!(
-                "EXISTS (SELECT 1 FROM json_each(metadata->>'artists') WHERE value = ?)"
-            ));
-            params.push(format!("%{}%", artist));
+        if filter.artist.is_some() {
+            conditions.push("metadata->>'artist' LIKE ?".into());
         }
 
         if !conditions.is_empty() {
@@ -132,9 +126,13 @@ impl Repository for ReleaseRepository {
             sql.push_str(&conditions.join(" AND "));
         }
 
-        let mut query = sqlx::query_as::<_, CatalogItem<Release>>(&sql);
-        for param in &params {
-            query = query.bind(param);
+        let mut query = sqlx::query_as::<_, CatalogItem<Self::Item>>(&sql);
+
+        if let Some(title) = &filter.title {
+            query = query.bind(format!("%{}%", title));
+        }
+        if let Some(artist) = &filter.artist {
+            query = query.bind(format!("%{}%", artist));
         }
 
         query
