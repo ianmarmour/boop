@@ -1,4 +1,4 @@
-use std::{fmt::Debug, sync::LazyLock, time::Duration};
+use std::{fmt::Debug, time::Duration};
 
 use crate::{audio::AudioHandle, model::track::Track};
 use iced::{
@@ -7,15 +7,24 @@ use iced::{
     advanced::image::Handle as ImageHandle,
     keyboard::{Key, key::Named},
     time::every,
-    widget::{Column, Container, Image, image, row, text},
+    widget::{Column, Container, Image, row, text},
 };
-use tracing::{error, info};
+use tracing::debug;
 
 #[derive(Debug, PartialEq, Default, Clone)]
-enum PlayerState {
+pub enum PlayerState {
     #[default]
     Paused,
     Playing,
+}
+
+impl std::fmt::Display for PlayerState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlayerState::Playing => write!(f, "PLAY"),
+            PlayerState::Paused => write!(f, "PAUSE"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -59,9 +68,7 @@ impl Player {
         }
     }
 
-    pub fn view(&self) -> Element<PlayerMessage> {
-        error!("invoked renderer");
-
+    pub fn view(&self) -> Element<'_, PlayerMessage> {
         let content = match &self.track {
             Some(track) => match &self.cover {
                 Some(cover) => Column::new()
@@ -112,7 +119,7 @@ impl Player {
                 self.track = Some(track.clone());
                 self.audio = Some(handle);
 
-                self.cover = Some(ImageHandle::from_bytes(track.cover_art().byte_data));
+                self.cover = Some(ImageHandle::from_bytes(track.cover().byte_data));
 
                 Task::done(PlayerMessage::Play)
             }
@@ -146,7 +153,7 @@ impl Player {
 
     pub fn subscription(&self) -> Subscription<PlayerMessage> {
         if self.state == PlayerState::Playing {
-            info!("subscription started");
+            debug!("playback event emitting");
             every(Duration::from_millis(100)).map(|_| PlayerMessage::Playing)
         } else {
             Subscription::none()

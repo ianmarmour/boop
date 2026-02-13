@@ -7,7 +7,7 @@ use symphonia::core::{
     formats::FormatOptions,
     io::MediaSourceStream,
     meta::{MetadataOptions, StandardTagKey, StandardVisualKey},
-    probe::{self, Hint},
+    probe::Hint,
 };
 use thiserror::Error;
 
@@ -100,7 +100,7 @@ impl Track {
         Ok(MediaSourceStream::new(Box::new(file), Default::default()))
     }
 
-    pub fn cover_art(&self) -> Cover {
+    pub fn cover(&self) -> Cover {
         if let Ok(file) = File::open(&self.path).map_err(|_| TrackError::Unknown) {
             let media_stream = MediaSourceStream::new(Box::new(file), Default::default());
 

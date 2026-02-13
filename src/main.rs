@@ -21,7 +21,7 @@ fn setup_audio_output() -> Option<Device> {
 fn main() -> iced::Result {
     tracing_subscriber::fmt::init();
 
-    let device = setup_audio_output().expect("unable to setup audio device");
+    let _ = setup_audio_output().expect("unable to setup audio device");
 
     // Create a runtime just for setup
     let rt = tokio::runtime::Runtime::new().unwrap();

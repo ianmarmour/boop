@@ -1,10 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
-use tracing::{debug, info};
-
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tracing_subscriber::field::debug;
 
 use crate::{
     model::track::Track,

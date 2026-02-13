@@ -1,5 +1,5 @@
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::{
     model::{CatalogItem, artist::Artist, release::Release, track::Track},

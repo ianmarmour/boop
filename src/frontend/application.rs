@@ -1,15 +1,16 @@
 use iced::{
-    Color, Element, Padding, Task, Theme, border,
+    Element, Padding, Subscription, Task,
     keyboard::{self, Key},
+    widget::column,
     widget::container,
-    widget::container::Style,
 };
-use tracing::info;
+use tracing::debug;
 
 use crate::{
     frontend::{
-        library::view::{Library, LibraryMessage},
-        player::{Player, PlayerMessage},
+        library::{Library, LibraryMessage},
+        menu::{Menu, MenuMessage},
+        player::{Player, PlayerMessage, PlayerState},
     },
     service::CatalogService,
 };
@@ -23,7 +24,9 @@ pub enum ApplicationView {
 
 #[derive(Debug, Clone)]
 pub enum ApplicationMessage {
+    ChangeView(ApplicationView),
     Library(LibraryMessage),
+    Menu(MenuMessage),
     Player(PlayerMessage),
     Input(Key),
 }
@@ -32,64 +35,62 @@ pub struct Application {
     current_view: ApplicationView,
     pub player: Player,
     pub library: Library,
+    pub menu: Menu,
 }
 
 impl Application {
-    pub fn new(catalog: CatalogService) -> (Application, Task<ApplicationMessage>) {
+    pub fn new(catalog: CatalogService) -> (Self, Task<ApplicationMessage>) {
         let (library, library_task) = Library::new(catalog.clone());
 
-        let application = Application {
+        let application = Self {
             current_view: ApplicationView::default(),
             player: Player::default(),
             library: library,
+            menu: Menu::default(),
         };
 
         (application, library_task.map(ApplicationMessage::Library))
     }
 
-    pub fn view(&self) -> Element<ApplicationMessage> {
-        let view_element = match self.current_view {
+    pub fn view(&self) -> Element<'_, ApplicationMessage> {
+        let element = match self.current_view {
             ApplicationView::Library => self.library.view().map(ApplicationMessage::Library),
             ApplicationView::Player => self.player.view().map(ApplicationMessage::Player),
         };
 
-        container(view_element)
-            .padding(Padding {
-                top: 0.0,
-                bottom: 0.0,
-                left: 1.0,
-                right: 1.0,
-            })
-            .center_x(480)
-            .height(640)
-            .width(480)
-            .style(borderd_container)
-            .into()
+        column![
+            self.menu.view().map(ApplicationMessage::Menu),
+            container(element)
+                .padding(Padding {
+                    top: 0.0,
+                    bottom: 0.0,
+                    left: 1.0,
+                    right: 1.0,
+                })
+                .center_x(480)
+                .height(640)
+                .width(480)
+        ]
+        .into()
     }
 
     pub fn update(&mut self, message: ApplicationMessage) -> Task<ApplicationMessage> {
         match message {
+            ApplicationMessage::ChangeView(view) => {
+                self.current_view = view;
+                Task::none()
+            }
             ApplicationMessage::Library(message) => match message {
                 LibraryMessage::TrackSelect(track) => {
                     Task::done(ApplicationMessage::Player(PlayerMessage::Load(track)))
                 }
-                other => self.library.update(other).map(ApplicationMessage::Library),
-            },
-            ApplicationMessage::Input(key) => match self.current_view {
-                ApplicationView::Library => self
+                message => self
                     .library
-                    .update(LibraryMessage::InputEvent(key))
+                    .update(message)
                     .map(ApplicationMessage::Library),
-                ApplicationView::Player => match key {
-                    Key::Named(keyboard::key::Named::Backspace) => {
-                        self.current_view = ApplicationView::Library;
-                        Task::none()
-                    }
-                    key => self
-                        .player
-                        .update(PlayerMessage::Input(key))
-                        .map(ApplicationMessage::Player),
-                },
+            },
+            ApplicationMessage::Menu(message) => match message {
+                message => self.menu.update(message).map(ApplicationMessage::Menu),
             },
             ApplicationMessage::Player(message) => {
                 let task = self
@@ -97,47 +98,54 @@ impl Application {
                     .update(message.clone())
                     .map(ApplicationMessage::Player);
 
-                if let PlayerMessage::Load(_) = message {
-                    self.current_view = ApplicationView::Player;
-                };
-
-                task
+                match message {
+                    PlayerMessage::Load(_) => task.chain(Task::done(
+                        ApplicationMessage::ChangeView(ApplicationView::Player),
+                    )),
+                    PlayerMessage::Play => Task::batch([
+                        task,
+                        Task::done(ApplicationMessage::Menu(MenuMessage::PlayerStatus(
+                            PlayerState::Playing,
+                        ))),
+                    ]),
+                    PlayerMessage::Pause => Task::batch([
+                        task,
+                        Task::done(ApplicationMessage::Menu(MenuMessage::PlayerStatus(
+                            PlayerState::Paused,
+                        ))),
+                    ]),
+                    _ => task,
+                }
             }
+            ApplicationMessage::Input(key) => match self.current_view {
+                ApplicationView::Library => self
+                    .library
+                    .update(LibraryMessage::InputEvent(key))
+                    .map(ApplicationMessage::Library),
+                ApplicationView::Player => match key {
+                    Key::Named(keyboard::key::Named::Backspace) => {
+                        Task::done(ApplicationMessage::ChangeView(ApplicationView::Library))
+                    }
+                    key => self
+                        .player
+                        .update(PlayerMessage::Input(key))
+                        .map(ApplicationMessage::Player),
+                },
+            },
         }
     }
 
     pub fn subscription(&self) -> iced::Subscription<ApplicationMessage> {
-        iced::Subscription::batch([
+        Subscription::batch([
             keyboard::listen().filter_map(|event| {
-                info!("keyboard subscribed key event detected: {:?}", event);
-
+                debug!("keyboard event detected: {:?}", event);
                 match event {
-                    keyboard::Event::KeyPressed {
-                        key,
-                        modified_key,
-                        physical_key,
-                        location,
-                        modifiers,
-                        text,
-                        repeat,
-                    } => Some(ApplicationMessage::Input(key)),
+                    keyboard::Event::KeyPressed { key, .. } => Some(ApplicationMessage::Input(key)),
                     _ => None,
                 }
             }),
             self.player.subscription().map(ApplicationMessage::Player),
+            self.menu.subscription().map(ApplicationMessage::Menu),
         ])
-    }
-}
-
-pub fn borderd_container(theme: &Theme) -> Style {
-    let palette = theme.extended_palette();
-
-    Style {
-        background: Some(Color::from_rgb8(255, 0, 0).into()),
-        text_color: Some(palette.background.weak.text),
-        border: border::rounded(0.0)
-            .width(1.0) // Missing width makes border invisible
-            .color(Color::BLACK), // Ensure color is applied last to be sure
-        ..Style::default()
     }
 }
