@@ -6,10 +6,18 @@ use std::fs::File;
 use symphonia::core::{
     formats::FormatOptions,
     io::MediaSourceStream,
-    meta::{MetadataOptions, StandardTagKey},
-    probe::Hint,
+    meta::{MetadataOptions, StandardTagKey, StandardVisualKey},
+    probe::{self, Hint},
 };
 use thiserror::Error;
+
+const DEFAULT_COVER_ART: &[u8] = include_bytes!("cover_art.png");
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Cover {
+    pub byte_data: Vec<u8>,
+    pub mime_type: String,
+}
 
 #[derive(Debug, Clone, Error)]
 pub enum TrackError {
@@ -19,7 +27,7 @@ pub enum TrackError {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, FromRow)]
 pub struct Track {
     pub title: String,
     pub release: Option<String>,
@@ -90,5 +98,39 @@ impl Track {
     pub fn open(&self) -> Result<MediaSourceStream, TrackError> {
         let file = File::open(&self.path).map_err(|_| TrackError::Unknown)?;
         Ok(MediaSourceStream::new(Box::new(file), Default::default()))
+    }
+
+    pub fn cover_art(&self) -> Cover {
+        if let Ok(file) = File::open(&self.path).map_err(|_| TrackError::Unknown) {
+            let media_stream = MediaSourceStream::new(Box::new(file), Default::default());
+
+            let probe_result = symphonia::default::get_probe().format(
+                &Hint::default(),
+                media_stream,
+                &FormatOptions::default(),
+                &MetadataOptions::default(),
+            );
+
+            if let Ok(mut probe) = probe_result {
+                if let Some(metadata) = probe.format.metadata().current() {
+                    for visual in metadata.visuals() {
+                        match visual.usage {
+                            Some(StandardVisualKey::FrontCover) => {
+                                return Cover {
+                                    mime_type: visual.media_type.clone(),
+                                    byte_data: visual.data.to_vec(),
+                                };
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        Cover {
+            mime_type: "image/png".to_string(),
+            byte_data: DEFAULT_COVER_ART.to_vec(),
+        }
     }
 }

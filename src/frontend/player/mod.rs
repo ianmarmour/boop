@@ -4,13 +4,12 @@ use crate::{audio::AudioHandle, model::track::Track};
 use iced::{
     Alignment::Center,
     Element, Length, Subscription, Task,
-    keyboard::Key,
+    advanced::image::Handle as ImageHandle,
+    keyboard::{Key, key::Named},
+    time::every,
     widget::{Column, Container, Image, image, row, text},
 };
-
-const ALBUM_ART_PLACEHOLDER: &[u8] = include_bytes!("album_art.png");
-static ALBUM_ART_HANDLE: LazyLock<image::Handle> =
-    LazyLock::new(|| image::Handle::from_bytes(ALBUM_ART_PLACEHOLDER));
+use tracing::{error, info};
 
 #[derive(Debug, PartialEq, Default, Clone)]
 enum PlayerState {
@@ -33,6 +32,7 @@ pub struct Player {
     state: PlayerState,
     track: Option<Track>,
     audio: Option<AudioHandle>,
+    cover: Option<ImageHandle>,
     position: Option<Duration>,
 }
 
@@ -42,6 +42,7 @@ impl Default for Player {
             state: PlayerState::Paused,
             track: None,
             audio: None,
+            cover: None,
             position: None,
         }
     }
@@ -53,39 +54,41 @@ impl Player {
             state: PlayerState::default(),
             track: None,
             audio: None,
+            cover: None,
             position: None,
         }
     }
 
     pub fn view(&self) -> Element<PlayerMessage> {
-        let album_art = Image::new(ALBUM_ART_HANDLE.clone())
-            .width(Length::Fixed(80.0))
-            .height(Length::Fixed(80.0));
+        error!("invoked renderer");
 
         let content = match &self.track {
-            Some(track) => Column::new()
-                .align_x(Center)
-                .push(album_art)
-                .push(text(track.title.clone()))
-                .push(text(track.artist.clone().unwrap_or_default()))
-                .push(row![
-                    text(
-                        self.position
-                            .map(format_duration)
-                            .unwrap_or_else(|| "--:--".into())
-                    ),
-                    text(" / "),
-                    text(
-                        self.track
-                            .as_ref()
-                            .map(|t| format_duration(t.duration))
-                            .unwrap_or_else(|| "--:--".into())
-                    ),
-                ]),
-            None => Column::new()
-                .align_x(Center)
-                .push(album_art)
-                .push(text("No track loaded")),
+            Some(track) => match &self.cover {
+                Some(cover) => Column::new()
+                    .align_x(Center)
+                    .push(
+                        Container::new(Image::new(cover).width(Length::Fill).height(Length::Fill))
+                            .padding(40),
+                    )
+                    .push(text(track.title.clone()))
+                    .push(text(track.artist.clone().unwrap_or_default()))
+                    .push(row![
+                        text(
+                            self.position
+                                .map(format_duration)
+                                .unwrap_or_else(|| "--:--".into())
+                        ),
+                        text(" / "),
+                        text(
+                            self.track
+                                .as_ref()
+                                .map(|t| format_duration(t.duration))
+                                .unwrap_or_else(|| "--:--".into())
+                        ),
+                    ]),
+                None => Column::new(),
+            },
+            None => Column::new().align_x(Center).push(text("No track loaded")),
         };
 
         Container::new(content)
@@ -97,24 +100,30 @@ impl Player {
     pub fn update(&mut self, message: PlayerMessage) -> Task<PlayerMessage> {
         match message {
             PlayerMessage::Load(track) => {
+                if let Some(inner) = &self.track {
+                    if &track == inner {
+                        return Task::none();
+                    }
+                }
+
                 let handle = AudioHandle::new();
                 handle.load(&track.path);
 
                 self.track = Some(track.clone());
                 self.audio = Some(handle);
 
+                self.cover = Some(ImageHandle::from_bytes(track.cover_art().byte_data));
+
                 Task::done(PlayerMessage::Play)
             }
             PlayerMessage::Play if self.audio.is_some() => {
                 self.state = PlayerState::Playing;
                 self.audio.as_ref().unwrap().play();
-
                 Task::none()
             }
             PlayerMessage::Pause if self.audio.is_some() => {
                 self.state = PlayerState::Paused;
                 self.audio.as_ref().unwrap().pause();
-
                 Task::none()
             }
             PlayerMessage::Playing => {
@@ -124,13 +133,21 @@ impl Player {
 
                 Task::none()
             }
+            PlayerMessage::Input(key) => match key.as_ref() {
+                Key::Named(Named::Space) => match self.state {
+                    PlayerState::Playing => Task::done(PlayerMessage::Pause),
+                    PlayerState::Paused => Task::done(PlayerMessage::Play),
+                },
+                _ => Task::none(),
+            },
             _ => todo!(),
         }
     }
 
     pub fn subscription(&self) -> Subscription<PlayerMessage> {
         if self.state == PlayerState::Playing {
-            iced::time::every(Duration::from_millis(100)).map(|_| PlayerMessage::Playing)
+            info!("subscription started");
+            every(Duration::from_millis(100)).map(|_| PlayerMessage::Playing)
         } else {
             Subscription::none()
         }

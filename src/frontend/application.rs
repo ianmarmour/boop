@@ -71,7 +71,6 @@ impl Application {
         match message {
             ApplicationMessage::Library(message) => match message {
                 LibraryMessage::TrackSelect(track) => {
-                    self.current_view = ApplicationView::Player;
                     Task::done(ApplicationMessage::Player(PlayerMessage::Load(track)))
                 }
                 other => self.library.update(other).map(ApplicationMessage::Library),
@@ -86,11 +85,23 @@ impl Application {
                         self.current_view = ApplicationView::Library;
                         Task::none()
                     }
-                    _ => Task::none(),
+                    key => self
+                        .player
+                        .update(PlayerMessage::Input(key))
+                        .map(ApplicationMessage::Player),
                 },
             },
             ApplicationMessage::Player(message) => {
-                self.player.update(message).map(ApplicationMessage::Player)
+                let task = self
+                    .player
+                    .update(message.clone())
+                    .map(ApplicationMessage::Player);
+
+                if let PlayerMessage::Load(_) = message {
+                    self.current_view = ApplicationView::Player;
+                };
+
+                task
             }
         }
     }
@@ -122,7 +133,7 @@ pub fn borderd_container(theme: &Theme) -> Style {
     let palette = theme.extended_palette();
 
     Style {
-        background: Some(palette.background.base.color.into()),
+        background: Some(Color::from_rgb8(255, 0, 0).into()),
         text_color: Some(palette.background.weak.text),
         border: border::rounded(0.0)
             .width(1.0) // Missing width makes border invisible

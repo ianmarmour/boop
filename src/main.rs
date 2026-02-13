@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use cpal::{Device, traits::HostTrait};
 use sqlx::pool::PoolOptions;
 
-use iced::{Color, Theme};
+use iced::{Color, Size, Theme};
 
 use crate::{repository::RepositoryContext, service::CatalogService};
 
@@ -59,8 +59,9 @@ fn main() -> iced::Result {
         frontend::application::Application::view,
     )
     .theme(theme)
-    .decorations(false)
+    .decorations(true)
     .antialiasing(true)
+    .window_size(Size::new(480.0, 640.0))
     .subscription(frontend::application::Application::subscription)
     .run()
 }
