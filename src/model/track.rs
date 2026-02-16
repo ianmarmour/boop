@@ -79,7 +79,7 @@ impl Track {
             for tag in metadata.tags() {
                 match tag.std_key {
                     Some(StandardTagKey::TrackTitle) => title = Some(tag.value.to_string()),
-                    Some(StandardTagKey::Artist) => artist = Some(tag.value.to_string()),
+                    Some(StandardTagKey::AlbumArtist) => artist = Some(tag.value.to_string()),
                     Some(StandardTagKey::Album) => album = Some(tag.value.to_string()),
                     _ => {}
                 }

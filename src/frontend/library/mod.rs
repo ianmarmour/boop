@@ -112,6 +112,7 @@ pub enum LibraryMessage {
 pub enum LibraryItemAction {
     SelectNext,
     SelectPrevious,
+    SelectByCatalogId(i64),
 }
 
 #[derive(Debug, Clone)]
@@ -151,6 +152,15 @@ impl LibraryItems {
                             self.inner[index - 1].toggled_selected();
                         } else {
                             self.inner[index].toggled_selected();
+                        }
+                    }
+                    LibraryItemAction::SelectByCatalogId(id) => {
+                        if let Some(item_idx) = self
+                            .inner
+                            .iter()
+                            .position(|item| item.catalog_item.id == id)
+                        {
+                            self.inner[item_idx].toggled_selected();
                         }
                     }
                 }
@@ -586,9 +596,7 @@ impl Library {
                 },
                 _ => Task::none(),
             },
-            LibraryMessage::TrackSelect(track) => {
-                todo!()
-            }
+            LibraryMessage::TrackSelect(track) => Task::none(),
             LibraryMessage::Error(test) => {
                 info!(test);
                 Task::none()

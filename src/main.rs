@@ -45,7 +45,9 @@ fn main() -> iced::Result {
             .await
             .expect("error initializing services");
 
-        let _ = service.sync(PathBuf::from("/music")).await;
+        let _ = service
+            .sync(PathBuf::from("/Users/ian/Desktop/music/"))
+            .await;
 
         return service;
     });

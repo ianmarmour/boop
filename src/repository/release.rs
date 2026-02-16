@@ -115,10 +115,13 @@ impl Repository for ReleaseRepository {
         let mut conditions: Vec<String> = Vec::new();
 
         if filter.title.is_some() {
-            conditions.push("metadata->>'title' LIKE ?".into());
+            conditions.push(format!("metadata->>'title' LIKE ${}", conditions.len() + 1));
         }
         if filter.artist.is_some() {
-            conditions.push("metadata->>'artist' LIKE ?".into());
+            conditions.push(format!(
+                "metadata->>'artist' LIKE ${}",
+                conditions.len() + 1
+            ));
         }
 
         if !conditions.is_empty() {
@@ -134,6 +137,12 @@ impl Repository for ReleaseRepository {
         if let Some(artist) = &filter.artist {
             query = query.bind(format!("%{}%", artist));
         }
+
+        let all: Vec<(String,)> = sqlx::query_as("SELECT metadata FROM releases")
+            .fetch_all(&self.pool)
+            .await
+            .unwrap();
+        println!("All releases: {:?}", all);
 
         query
             .fetch_all(&self.pool)
