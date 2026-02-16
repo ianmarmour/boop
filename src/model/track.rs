@@ -11,7 +11,7 @@ use symphonia::core::{
 };
 use thiserror::Error;
 
-const DEFAULT_COVER_ART: &[u8] = include_bytes!("cover_art.png");
+const DEFAULT_COVER_ART: &[u8] = include_bytes!("../resources/cover_art.png");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cover {

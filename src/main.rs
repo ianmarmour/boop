@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use cpal::{Device, traits::HostTrait};
 use sqlx::pool::PoolOptions;
 
-use iced::{Color, Size, Theme};
+use iced::{Color, Font, Size, Theme};
 
 use crate::{repository::RepositoryContext, service::CatalogService};
 
@@ -12,6 +12,8 @@ pub mod frontend;
 pub mod model;
 pub mod repository;
 pub mod service;
+
+const APPLICATION_FONT: &[u8] = include_bytes!("resources/jersey_regular.ttf");
 
 fn setup_audio_output() -> Option<Device> {
     let host = cpal::default_host();
@@ -58,6 +60,8 @@ fn main() -> iced::Result {
         frontend::application::Application::update,
         frontend::application::Application::view,
     )
+    .font(APPLICATION_FONT)
+    .default_font(Font::with_name("Jersey 10"))
     .theme(theme)
     .decorations(true)
     .antialiasing(true)
