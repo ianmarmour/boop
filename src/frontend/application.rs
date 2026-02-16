@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use iced::{
     Element, Padding, Subscription, Task,
     keyboard::{self, Key},
@@ -8,18 +10,32 @@ use tracing::debug;
 
 use crate::{
     frontend::{
-        library::{Library, LibraryMessage},
+        library::{Library, LibraryMessage, LibraryView},
         menu::{Menu, MenuMessage},
         player::{Player, PlayerMessage, PlayerState},
     },
     service::CatalogService,
 };
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub enum ApplicationView {
-    #[default]
-    Library,
+    Library(LibraryView),
     Player,
+}
+
+impl Default for ApplicationView {
+    fn default() -> Self {
+        ApplicationView::Library(LibraryView::default())
+    }
+}
+
+impl Display for ApplicationView {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            ApplicationView::Library(library_view) => write!(f, "Library - {:?}", library_view),
+            ApplicationView::Player => write!(f, "Player"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -54,7 +70,7 @@ impl Application {
 
     pub fn view(&self) -> Element<'_, ApplicationMessage> {
         let element = match self.current_view {
-            ApplicationView::Library => self.library.view().map(ApplicationMessage::Library),
+            ApplicationView::Library(_) => self.library.view().map(ApplicationMessage::Library),
             ApplicationView::Player => self.player.view().map(ApplicationMessage::Player),
         };
 
@@ -63,13 +79,14 @@ impl Application {
             container(element)
                 .padding(Padding {
                     top: 0.0,
-                    bottom: 0.0,
+                    bottom: 1.0,
                     left: 1.0,
                     right: 1.0,
                 })
-                .center_x(480)
-                .height(640)
-                .width(480)
+                .center_x(720)
+                .height(720)
+                .width(720)
+                .clip(true)
         ]
         .into()
     }
@@ -77,13 +94,18 @@ impl Application {
     pub fn update(&mut self, message: ApplicationMessage) -> Task<ApplicationMessage> {
         match message {
             ApplicationMessage::ChangeView(view) => {
-                self.current_view = view;
-                Task::none()
+                self.current_view = view.clone();
+                self.menu
+                    .update(MenuMessage::ViewChange(view))
+                    .map(ApplicationMessage::Menu)
             }
             ApplicationMessage::Library(message) => match message {
                 LibraryMessage::TrackSelect(track) => {
                     Task::done(ApplicationMessage::Player(PlayerMessage::Load(track)))
                 }
+                LibraryMessage::ChangeView(view) => Task::done(ApplicationMessage::ChangeView(
+                    ApplicationView::Library(view),
+                )),
                 message => self
                     .library
                     .update(message)
@@ -102,29 +124,19 @@ impl Application {
                     PlayerMessage::Load(_) => task.chain(Task::done(
                         ApplicationMessage::ChangeView(ApplicationView::Player),
                     )),
-                    PlayerMessage::Play => Task::batch([
-                        task,
-                        Task::done(ApplicationMessage::Menu(MenuMessage::PlayerStatus(
-                            PlayerState::Playing,
-                        ))),
-                    ]),
-                    PlayerMessage::Pause => Task::batch([
-                        task,
-                        Task::done(ApplicationMessage::Menu(MenuMessage::PlayerStatus(
-                            PlayerState::Paused,
-                        ))),
-                    ]),
                     _ => task,
                 }
             }
             ApplicationMessage::Input(key) => match self.current_view {
-                ApplicationView::Library => self
+                ApplicationView::Library(_) => self
                     .library
                     .update(LibraryMessage::InputEvent(key))
                     .map(ApplicationMessage::Library),
                 ApplicationView::Player => match key {
                     Key::Named(keyboard::key::Named::Backspace) => {
-                        Task::done(ApplicationMessage::ChangeView(ApplicationView::Library))
+                        Task::done(ApplicationMessage::ChangeView(ApplicationView::Library(
+                            LibraryView::Track,
+                        )))
                     }
                     key => self
                         .player

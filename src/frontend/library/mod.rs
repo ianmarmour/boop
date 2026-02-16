@@ -1,22 +1,48 @@
-use std::{fmt::Debug, slice};
+use std::{
+    fmt::{Debug, Display, Formatter},
+    slice,
+};
 
 use crate::{
     model::{CatalogItem, CatalogMetadata, artist::Artist, release::Release, track::Track},
     repository::{artist::ArtistFilter, release::ReleaseFilter, track::TrackFilter},
     service::CatalogService,
 };
+use iced::widget::operation::scroll_to;
 use iced::{
-    Background, Color, Element, Length, Task, Theme,
+    Background, Border, Color, Element, Length, Shadow, Task, Theme,
     keyboard::Key,
+    widget::button,
+    widget::scrollable,
     widget::{
-        button,
+        Id,
         button::{Status, Style},
+        container::{self},
         keyed::Column,
+        scrollable::AutoScroll,
         text,
     },
 };
 use thiserror::Error;
 use tracing::info;
+
+#[derive(Debug, Clone, Default)]
+pub enum LibraryView {
+    #[default]
+    Artist,
+    Release,
+    Track,
+}
+
+impl Display for LibraryView {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            LibraryView::Artist => write!(f, "Artist"),
+            LibraryView::Release => write!(f, "Release"),
+            LibraryView::Track => write!(f, "Track"),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct LibraryItem {
@@ -36,22 +62,24 @@ impl LibraryItem {
         let button_style = |theme: &Theme, _: Status| -> Style {
             let palette = theme.extended_palette();
 
-            let background = match self.selected {
-                true => Some(Background::Color(palette.background.neutral.color)),
-                false => Some(Background::Color(Color::TRANSPARENT)),
-            };
-
             Style {
-                background: background,
+                text_color: palette.background.base.text,
                 ..Style::default()
             }
         };
 
-        button(text(self.catalog_item.metadata.display_text()))
+        let button_text = match self.selected {
+            false => text(self.catalog_item.metadata.display_text()),
+            true => text(format!("> {}", self.catalog_item.metadata.display_text())),
+        }
+        .wrapping(text::Wrapping::None);
+
+        button(button_text)
             .on_press(LibraryMessage::ItemLoad(Some(LibraryItem::new(
                 self.catalog_item.clone(),
             ))))
             .width(Length::Fill)
+            .height(Length::Fixed(60.0))
             .style(button_style)
             .into()
     }
@@ -75,6 +103,7 @@ pub enum LibraryMessage {
     TrackSelect(Track),
     ItemRefresh(Vec<CatalogItem<CatalogMetadata>>),
     ItemLoad(Option<LibraryItem>),
+    ChangeView(LibraryView),
     InputEvent(Key),
     Error(String),
 }
@@ -176,6 +205,8 @@ pub enum LibraryError {
 pub struct Library {
     catalog: Option<CatalogService>,
     items: LibraryItems,
+    scroll_id: Id,         // Add this
+    current_scroll_y: f32, // Add this to track scroll position
 }
 
 impl Default for Library {
@@ -183,6 +214,8 @@ impl Default for Library {
         Self {
             catalog: None,
             items: LibraryItems::new(vec![]),
+            scroll_id: Id::unique(),
+            current_scroll_y: 0.0,
         }
     }
 }
@@ -192,6 +225,8 @@ impl Library {
         let library = Self {
             catalog: Some(catalog.clone()),
             items: LibraryItems::new(vec![]),
+            scroll_id: Id::unique(),
+            current_scroll_y: 0.0,
         };
 
         let task = Task::perform(
@@ -224,7 +259,35 @@ impl Library {
             col = col.push(item.catalog_item.id, item.view());
         }
 
-        col.into()
+        scrollable(col)
+            .id(self.scroll_id.clone())
+            .style(|theme, status| scrollable::Style {
+                container: container::Style::default(),
+                vertical_rail: scrollable::Rail {
+                    background: None,
+                    border: Border::default(),
+                    scroller: scrollable::Scroller {
+                        border: Border::default(),
+                        background: Background::Color(Color::TRANSPARENT),
+                    },
+                },
+                horizontal_rail: scrollable::Rail {
+                    background: None,
+                    border: Border::default(),
+                    scroller: scrollable::Scroller {
+                        border: Border::default(),
+                        background: Background::Color(Color::TRANSPARENT),
+                    },
+                },
+                gap: None,
+                auto_scroll: scrollable::AutoScroll {
+                    background: Background::Color(Color::TRANSPARENT),
+                    border: Border::default(),
+                    shadow: Shadow::default(),
+                    icon: Color::WHITE,
+                },
+            })
+            .into()
     }
 
     pub fn update(&mut self, message: LibraryMessage) -> Task<LibraryMessage> {
@@ -327,11 +390,73 @@ impl Library {
             LibraryMessage::InputEvent(key) => match key.as_ref() {
                 Key::Named(iced::keyboard::key::Named::ArrowUp) => {
                     self.items.select(LibraryItemAction::SelectPrevious);
-                    Task::none()
+
+                    let selected_idx = self
+                        .items
+                        .inner
+                        .iter()
+                        .position(|item| item.selected)
+                        .unwrap_or(0);
+
+                    let scroll_id = self.scroll_id.clone();
+                    let item_height = 65.0;
+                    let viewport_height = 680.0;
+                    let padding = 10.0; // Add some breathing room
+
+                    // Calculate item position
+                    let item_top = selected_idx as f32 * item_height;
+                    let item_bottom = item_top + item_height;
+
+                    // Only scroll if item is above visible viewport
+                    if item_top < self.current_scroll_y {
+                        // Keep selected item at TOP when scrolling up
+                        self.current_scroll_y = item_top;
+
+                        scroll_to(
+                            scroll_id,
+                            scrollable::AbsoluteOffset {
+                                x: 0.0,
+                                y: item_top,
+                            },
+                        )
+                    } else {
+                        Task::none()
+                    }
                 }
                 Key::Named(iced::keyboard::key::Named::ArrowDown) => {
                     self.items.select(LibraryItemAction::SelectNext);
-                    Task::none()
+
+                    let selected_idx = self
+                        .items
+                        .inner
+                        .iter()
+                        .position(|item| item.selected)
+                        .unwrap_or(0);
+
+                    let scroll_id = self.scroll_id.clone();
+                    let item_height = 65.0;
+                    let viewport_height = 680.0;
+                    let padding = 25.0; // Add some breathing room
+
+                    // Calculate item position
+                    let item_top = selected_idx as f32 * item_height;
+                    let item_bottom = item_top + item_height;
+
+                    // Only scroll if item is below viewport
+                    if item_bottom > self.current_scroll_y + viewport_height {
+                        let new_scroll_y = item_bottom - viewport_height + padding;
+                        self.current_scroll_y = new_scroll_y;
+
+                        scroll_to(
+                            scroll_id,
+                            scrollable::AbsoluteOffset {
+                                x: 0.0,
+                                y: new_scroll_y,
+                            },
+                        )
+                    } else {
+                        Task::none()
+                    }
                 }
                 Key::Named(iced::keyboard::key::Named::Enter) => match self.items.selected() {
                     Some(item) => match &item.catalog_item.metadata {
@@ -340,91 +465,76 @@ impl Library {
                         }
                         CatalogMetadata::Artist(a) => {
                             let name = a.name.clone();
-                            Task::perform(
-                                async move {
-                                    let item = catalog
-                                        .artist
-                                        .lock()
-                                        .await
-                                        .get_artist(&name)
-                                        .await
-                                        .map_err(|e| LibraryError::Internal(e.into()))?;
-                                    Ok::<CatalogItem<CatalogMetadata>, LibraryError>(item.into())
-                                },
-                                |result| match result {
-                                    Ok(item) => {
-                                        LibraryMessage::ItemLoad(Some(LibraryItem::new(item)))
-                                    }
-                                    Err(e) => LibraryMessage::Error(e.to_string()),
-                                },
-                            )
+                            Task::batch(vec![
+                                Task::perform(
+                                    async move {
+                                        let item = catalog
+                                            .artist
+                                            .lock()
+                                            .await
+                                            .get_artist(&name)
+                                            .await
+                                            .map_err(|e| LibraryError::Internal(e.into()))?;
+                                        Ok::<CatalogItem<CatalogMetadata>, LibraryError>(
+                                            item.into(),
+                                        )
+                                    },
+                                    |result| match result {
+                                        Ok(item) => {
+                                            LibraryMessage::ItemLoad(Some(LibraryItem::new(item)))
+                                        }
+                                        Err(e) => LibraryMessage::Error(e.to_string()),
+                                    },
+                                ),
+                                Task::done(LibraryMessage::ChangeView(LibraryView::Release)),
+                            ])
                         }
                         CatalogMetadata::Release(r) => {
                             let title = r.title.clone();
-                            Task::perform(
-                                async move {
-                                    let item = catalog
-                                        .release
-                                        .lock()
-                                        .await
-                                        .get_release(&title)
-                                        .await
-                                        .map_err(|e| LibraryError::Internal(e.into()))?;
-                                    Ok::<CatalogItem<CatalogMetadata>, LibraryError>(item.into())
-                                },
-                                |result| match result {
-                                    Ok(item) => {
-                                        LibraryMessage::ItemLoad(Some(LibraryItem::new(item)))
-                                    }
-                                    Err(e) => LibraryMessage::Error(e.to_string()),
-                                },
-                            )
+                            Task::batch(vec![
+                                Task::perform(
+                                    async move {
+                                        let item = catalog
+                                            .release
+                                            .lock()
+                                            .await
+                                            .get_release(&title)
+                                            .await
+                                            .map_err(|e| LibraryError::Internal(e.into()))?;
+                                        Ok::<CatalogItem<CatalogMetadata>, LibraryError>(
+                                            item.into(),
+                                        )
+                                    },
+                                    |result| match result {
+                                        Ok(item) => {
+                                            LibraryMessage::ItemLoad(Some(LibraryItem::new(item)))
+                                        }
+                                        Err(e) => LibraryMessage::Error(e.to_string()),
+                                    },
+                                ),
+                                Task::done(LibraryMessage::ChangeView(LibraryView::Track)),
+                            ])
                         }
                     },
                     None => todo!(),
                 },
                 Key::Named(iced::keyboard::key::Named::Backspace) => match self.items.selected() {
                     Some(item) => match &item.catalog_item.metadata {
-                        CatalogMetadata::Release(_) => Task::perform(
-                            async move {
-                                let items = catalog
-                                    .artist
-                                    .lock()
-                                    .await
-                                    .list_artists(ArtistFilter {
-                                        name: None,
-                                        track: None,
-                                    })
-                                    .await
-                                    .map_err(|e| LibraryError::Internal(e.into()))?;
-
-                                Ok::<Vec<CatalogItem<Artist>>, LibraryError>(items)
-                            },
-                            |result| match result {
-                                Ok(item) => LibraryMessage::ItemsLoad(
-                                    item.iter()
-                                        .map(|i| LibraryItem::new(i.to_owned().into()))
-                                        .collect(),
-                                ),
-                                Err(e) => LibraryMessage::Error(e.to_string()),
-                            },
-                        ),
-                        CatalogMetadata::Track(t) => {
-                            let track = t.clone();
+                        CatalogMetadata::Release(_) => Task::batch(vec![
                             Task::perform(
                                 async move {
                                     let items = catalog
-                                        .release
+                                        .artist
                                         .lock()
                                         .await
-                                        .list_releases(ReleaseFilter {
-                                            title: None,
-                                            artist: track.artist,
+                                        .list_artists(ArtistFilter {
+                                            name: None,
+                                            track: None,
                                         })
                                         .await
-                                        .map_err(|_| LibraryError::Unknown)?;
+                                        .map_err(|e| LibraryError::Internal(e.into()))?;
 
-                                    Ok::<Vec<CatalogItem<Release>>, LibraryError>(items)
+                                    Ok::<Vec<CatalogItem<Artist>>, LibraryError>(items)
                                 },
                                 |result| match result {
                                     Ok(item) => LibraryMessage::ItemsLoad(
@@ -434,7 +544,38 @@ impl Library {
                                     ),
                                     Err(e) => LibraryMessage::Error(e.to_string()),
                                 },
-                            )
+                            ),
+                            Task::done(LibraryMessage::ChangeView(LibraryView::Artist)),
+                        ]),
+                        CatalogMetadata::Track(t) => {
+                            let track = t.clone();
+                            Task::batch(vec![
+                                Task::perform(
+                                    async move {
+                                        let items = catalog
+                                            .release
+                                            .lock()
+                                            .await
+                                            .list_releases(ReleaseFilter {
+                                                title: None,
+                                                artist: track.artist,
+                                            })
+                                            .await
+                                            .map_err(|_| LibraryError::Unknown)?;
+
+                                        Ok::<Vec<CatalogItem<Release>>, LibraryError>(items)
+                                    },
+                                    |result| match result {
+                                        Ok(item) => LibraryMessage::ItemsLoad(
+                                            item.iter()
+                                                .map(|i| LibraryItem::new(i.to_owned().into()))
+                                                .collect(),
+                                        ),
+                                        Err(e) => LibraryMessage::Error(e.to_string()),
+                                    },
+                                ),
+                                Task::done(LibraryMessage::ChangeView(LibraryView::Release)),
+                            ])
                         }
                         _ => Task::none(),
                     },
@@ -453,6 +594,7 @@ impl Library {
                 Task::none()
                 //todo!()
             }
+            LibraryMessage::ChangeView(_) => Task::none(),
         }
     }
 }

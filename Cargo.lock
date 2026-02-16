@@ -3333,6 +3333,7 @@ dependencies = [
  "cpal 0.17.1",
  "iced",
  "iced_futures",
+ "image",
  "rodio",
  "serde",
  "serde_json",

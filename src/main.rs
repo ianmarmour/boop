@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use cpal::{Device, traits::HostTrait};
 use sqlx::pool::PoolOptions;
 
-use iced::{Color, Font, Size, Theme};
+use iced::{Color, Font, Pixels, Settings, Size, Theme};
 
 use crate::{repository::RepositoryContext, service::CatalogService};
 
@@ -45,9 +45,7 @@ fn main() -> iced::Result {
             .await
             .expect("error initializing services");
 
-        let _ = service
-            .sync(PathBuf::from("/Users/ian/Desktop/music"))
-            .await;
+        let _ = service.sync(PathBuf::from("/music")).await;
 
         return service;
     });
@@ -61,12 +59,18 @@ fn main() -> iced::Result {
         frontend::application::Application::view,
     )
     .font(APPLICATION_FONT)
-    .default_font(Font::with_name("Jersey 10"))
     .theme(theme)
     .decorations(true)
     .antialiasing(true)
-    .window_size(Size::new(480.0, 640.0))
+    .window_size(Size::new(720.0, 720.0))
     .subscription(frontend::application::Application::subscription)
+    .settings(Settings {
+        default_text_size: Pixels(48.0),
+        default_font: Font::with_name("Jersey 10"),
+        fonts: vec![APPLICATION_FONT.into()],
+        ..Default::default()
+    })
+    .resizable(false)
     .run()
 }
 
@@ -74,9 +78,9 @@ fn theme(_: &frontend::application::Application) -> Theme {
     iced::Theme::custom(
         String::from("Custom"),
         iced::theme::Palette {
-            background: Color::WHITE,
-            primary: Color::WHITE,
-            text: Color::BLACK,
+            background: Color::BLACK,
+            primary: Color::BLACK,
+            text: Color::WHITE,
             success: Color::WHITE,
             warning: Color::TRANSPARENT,
             danger: Color::TRANSPARENT,

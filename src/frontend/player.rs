@@ -1,14 +1,14 @@
-use std::{fmt::Debug, time::Duration};
-
 use crate::{audio::AudioHandle, model::track::Track};
 use iced::{
     Alignment::Center,
-    Element, Length, Subscription, Task,
+    Border, Color, Element, Length, Subscription, Task,
     advanced::image::Handle as ImageHandle,
     keyboard::{Key, key::Named},
     time::every,
-    widget::{Column, Container, Image, row, text},
+    widget::{Column, Container, Image, Space, container::Style, row, text},
 };
+use image::{DynamicImage, GenericImageView, ImageFormat, imageops::FilterType};
+use std::{fmt::Debug, time::Duration};
 use tracing::debug;
 
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -73,10 +73,25 @@ impl Player {
             Some(track) => match &self.cover {
                 Some(cover) => Column::new()
                     .align_x(Center)
+                    .push(Space::new().height(30))
                     .push(
-                        Container::new(Image::new(cover).width(Length::Fill).height(Length::Fill))
-                            .padding(40),
+                        Container::new(
+                            Image::new(cover)
+                                .width(Length::Fixed(400.0))
+                                .height(Length::Fixed(400.0)),
+                        )
+                        .width(Length::Shrink)
+                        .padding(5)
+                        .style(|theme| Style {
+                            border: Border {
+                                color: Color::WHITE,
+                                width: 5.0,
+                                radius: 0.0.into(), // Sharp corners
+                            },
+                            ..Default::default()
+                        }),
                     )
+                    .push(Space::new().height(20))
                     .push(text(track.title.clone()))
                     .push(text(track.artist.clone().unwrap_or_default()))
                     .push(row![
@@ -92,7 +107,8 @@ impl Player {
                                 .map(|t| format_duration(t.duration))
                                 .unwrap_or_else(|| "--:--".into())
                         ),
-                    ]),
+                    ])
+                    .width(Length::Fill),
                 None => Column::new(),
             },
             None => Column::new().align_x(Center).push(text("No track loaded")),
@@ -119,7 +135,7 @@ impl Player {
                 self.track = Some(track.clone());
                 self.audio = Some(handle);
 
-                self.cover = Some(ImageHandle::from_bytes(track.cover().byte_data));
+                self.cover = pixelate_image(track.cover().byte_data, 90 as u32).ok();
 
                 Task::done(PlayerMessage::Play)
             }
@@ -166,4 +182,24 @@ fn format_duration(d: Duration) -> String {
     let mins = secs / 60;
     let secs = secs % 60;
     format!("{:02}:{:02}", mins, secs)
+}
+
+fn pixelate_image(img_bytes: Vec<u8>, block_size: u32) -> Result<ImageHandle, image::ImageError> {
+    // Load the original image
+    let img = image::load_from_memory(img_bytes.as_ref())?;
+
+    // Downsample to create chunky pixels
+    // For 720x720 display:
+    // block_size 90 = 8x8 pixel blocks (720/90 = 8)
+    // block_size 60 = 12x12 pixel blocks (720/60 = 12)
+    // block_size 45 = 16x16 pixel blocks (720/45 = 16)
+    let small = img.resize_exact(block_size, block_size, FilterType::Nearest);
+
+    // Scale back up to 720x720 with nearest neighbor (creates the pixel blocks)
+    let pixelated = small.resize_exact(720, 720, FilterType::Nearest);
+
+    // Encode to PNG
+    let mut output = Vec::new();
+    pixelated.write_to(&mut std::io::Cursor::new(&mut output), ImageFormat::Png)?;
+    Ok(ImageHandle::from_bytes(output))
 }
