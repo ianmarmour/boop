@@ -7,7 +7,7 @@ use iced::{
     time::every,
     widget::{Column, Container, Image, Space, container::Style, row, text},
 };
-use image::{DynamicImage, GenericImageView, ImageFormat, imageops::FilterType};
+use image::{ImageFormat, imageops::FilterType};
 use std::{fmt::Debug, time::Duration};
 use tracing::debug;
 

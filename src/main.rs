@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use cpal::{Device, traits::HostTrait};
-use sqlx::{pool::PoolOptions, sqlite::SqlitePoolOptions};
+use sqlx::sqlite::SqlitePoolOptions;
 
 use iced::{Color, Font, Pixels, Settings, Size, Theme};
 

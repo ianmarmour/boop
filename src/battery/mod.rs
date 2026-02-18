@@ -16,7 +16,7 @@ pub enum BatteryHandleError {
 #[derive(Debug, Clone)]
 pub struct BatteryHandle {
     battery: Rc<RefCell<Battery>>,
-    manager: Rc<RefCell<Manager>>, // must keep alive
+    manager: Rc<RefCell<Manager>>,
 }
 
 impl BatteryHandle {

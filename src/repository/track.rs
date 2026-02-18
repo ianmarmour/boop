@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use sqlx::{AnyPool, SqlitePool};
+use sqlx::SqlitePool;
 
 use crate::{
     model::{CatalogItem, track::Track},

@@ -8,24 +8,19 @@ use crate::{
     repository::{artist::ArtistFilter, release::ReleaseFilter, track::TrackFilter},
     service::CatalogService,
 };
+use iced::widget::{image, operation::scroll_to, row};
 use iced::{
-    Alignment, Background, Border, Color, Element, Length, Padding, Shadow, Task, Theme,
+    Background, Border, Color, Element, Length, Padding, Shadow, Task, Theme,
     alignment::{Horizontal, Vertical},
     keyboard::Key,
     widget::{
-        Id, Space, button,
+        Id, button,
         button::{Status, Style},
         container,
-        image::{Handle, Image},
+        image::Handle,
         keyed::Column,
-        scrollable,
-        scrollable::AutoScroll,
-        text,
+        scrollable, text,
     },
-};
-use iced::{
-    alignment,
-    widget::{image, operation::scroll_to, row},
 };
 use thiserror::Error;
 use tracing::info;
