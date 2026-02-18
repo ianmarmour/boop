@@ -70,34 +70,62 @@ impl TrackService {
             .map_err(|e| TrackServiceError::Internal(e.into()))?
             .pop();
 
-        if let Some(release_name) = track.release {
-            if related_release.is_none() {
-                self.repository_context
-                    .release
-                    .lock()
-                    .await
-                    .create(Release {
-                        title: release_name.clone(),
-                        artist: track.artist.clone(),
-                        tracks: vec![created_track.metadata.title.clone()],
-                    })
-                    .await
-                    .map_err(|e| TrackServiceError::Internal(e.into()))?;
+        if let Some(release_name) = track.release.clone() {
+            match related_release {
+                Some(mut release_item) => {
+                    release_item.metadata.add_track(&track.title);
+
+                    self.repository_context
+                        .release
+                        .lock()
+                        .await
+                        .update(release_item)
+                        .await
+                        .map_err(|e| TrackServiceError::Internal(e.into()))?;
+                }
+                None => {
+                    self.repository_context
+                        .release
+                        .lock()
+                        .await
+                        .create(Release {
+                            title: release_name.clone(),
+                            artist: track.artist.clone(),
+                            tracks: vec![created_track.metadata.title.clone()],
+                        })
+                        .await
+                        .map_err(|e| TrackServiceError::Internal(e.into()))?;
+                }
             }
         }
 
         if let Some(artist_name) = track.artist {
-            if releated_artist.is_none() {
-                self.repository_context
-                    .artist
-                    .lock()
-                    .await
-                    .create(Artist {
-                        name: artist_name,
-                        releases: Vec::new(),
-                    })
-                    .await
-                    .map_err(|e| TrackServiceError::Internal(e.into()))?;
+            match releated_artist {
+                Some(mut artist_item) => {
+                    if let Some(release) = &track.release {
+                        artist_item.metadata.add_release(release);
+                    }
+
+                    self.repository_context
+                        .artist
+                        .lock()
+                        .await
+                        .update(artist_item)
+                        .await
+                        .map_err(|e| TrackServiceError::Internal(e.into()))?;
+                }
+                None => {
+                    self.repository_context
+                        .artist
+                        .lock()
+                        .await
+                        .create(Artist {
+                            name: artist_name,
+                            releases: Vec::new(),
+                        })
+                        .await
+                        .map_err(|e| TrackServiceError::Internal(e.into()))?;
+                }
             }
         };
 

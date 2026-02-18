@@ -21,3 +21,4 @@ tokio = { version = "1.49.0", features = ["full"] }
 uuidv4 = "1.0.0"
 rodio = "0.21.1"
 image = "0.25.9"
+bon = "3.9.0"
