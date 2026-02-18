@@ -289,7 +289,7 @@ impl Library {
         for item in self.items.iter() {
             let mut row = row![item.view()].height(ITEM_HEIGHT);
 
-            if !item.catalog_item.favorite {
+            if item.catalog_item.favorite {
                 row = row.push(
                     container(image(&self.favorite_image).width(24).height(24))
                         .align_y(Vertical::Center)
