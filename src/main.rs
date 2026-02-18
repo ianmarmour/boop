@@ -8,6 +8,7 @@ use iced::{Color, Font, Pixels, Settings, Size, Theme};
 use crate::{repository::RepositoryContext, service::CatalogService};
 
 pub mod audio;
+pub mod battery;
 pub mod frontend;
 pub mod model;
 pub mod repository;
