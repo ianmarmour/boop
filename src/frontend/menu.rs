@@ -70,6 +70,7 @@ impl Menu {
                 .align_x(Horizontal::Right),
         ]
         .padding(Padding::new(0.0).horizontal(10.0))
+        .height(50)
         .into()
     }
     pub fn update(&mut self, message: MenuMessage) -> Task<MenuMessage> {

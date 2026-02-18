@@ -4,15 +4,15 @@ use crate::{
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use sqlx::AnyPool;
+use sqlx::SqlitePool;
 
 #[derive(Debug, Clone)]
 pub struct ArtistRepository {
-    pool: AnyPool,
+    pool: SqlitePool,
 }
 
 impl ArtistRepository {
-    pub async fn new(pool: AnyPool) -> Result<Self, RepositoryError> {
+    pub async fn new(pool: SqlitePool) -> Result<Self, RepositoryError> {
         let mut repository = Self { pool };
         repository.setup().await?;
         Ok(repository)
@@ -36,6 +36,7 @@ impl Repository for ArtistRepository {
         sqlx::query(&format!(
             "CREATE TABLE IF NOT EXISTS {} (
                 id INTEGER PRIMARY KEY,
+                favorite BOOL NOT NULL DEFAULT FALSE,
                 metadata TEXT NOT NULL
             )",
             Self::TABLE_NAME
@@ -52,7 +53,7 @@ impl Repository for ArtistRepository {
         item: Self::Item,
     ) -> Result<CatalogItem<Self::Item>, RepositoryError> {
         let catalog_item: CatalogItem<Artist> = sqlx::query_as(&format!(
-            "INSERT INTO {} (metadata) VALUES ($1) RETURNING id, metadata",
+            "INSERT INTO {} (metadata) VALUES ($1) RETURNING id, favorite, metadata",
             Self::TABLE_NAME
         ))
         .bind(serde_json::to_string(&item).map_err(|e| RepositoryError::ItemCreate(e.to_string()))?)
@@ -65,7 +66,7 @@ impl Repository for ArtistRepository {
 
     async fn read(&mut self, id: &i64) -> Result<CatalogItem<Self::Item>, RepositoryError> {
         let catalog_item: CatalogItem<Artist> = sqlx::query_as(&format!(
-            "SELECT id, metadata FROM {} WHERE id = $1",
+            "SELECT id, favorite, metadata FROM {} WHERE id = $1",
             Self::TABLE_NAME
         ))
         .bind(&id)
@@ -81,13 +82,14 @@ impl Repository for ArtistRepository {
         item: CatalogItem<Self::Item>,
     ) -> Result<CatalogItem<Self::Item>, RepositoryError> {
         sqlx::query(&format!(
-            "UPDATE {} SET metadata = $1 WHERE id = $2",
+            "UPDATE {} SET metadata = $1, favorite = $2 WHERE id = $3",
             Self::TABLE_NAME
         ))
         .bind(
             &serde_json::to_string(&item.metadata)
                 .map_err(|e| RepositoryError::ItemCreate(e.to_string()))?,
         )
+        .bind(&item.favorite)
         .bind(&item.id)
         .execute(&self.pool)
         .await
@@ -110,7 +112,7 @@ impl Repository for ArtistRepository {
         &self,
         filter: Self::Filter,
     ) -> Result<Vec<CatalogItem<Self::Item>>, RepositoryError> {
-        let mut sql = format!("SELECT id, metadata FROM {}", Self::TABLE_NAME);
+        let mut sql = format!("SELECT id, favorite, metadata FROM {}", Self::TABLE_NAME);
         let mut conditions: Vec<String> = Vec::new();
 
         if filter.name.is_some() {

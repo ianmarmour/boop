@@ -63,7 +63,8 @@ impl CatalogService {
 
         for path in track_paths {
             let track = Track::from_path(path.clone()).expect("error creating track");
-            let _ = self.track.lock().await.create_track(track).await;
+            let test2 = self.track.lock().await.create_track(track).await;
+            tracing::error!("{:?}", test2);
         }
 
         Ok(())

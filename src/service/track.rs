@@ -132,6 +132,22 @@ impl TrackService {
         Ok(created_track)
     }
 
+    pub async fn favorite_track(
+        &mut self,
+        title: &str,
+    ) -> Result<CatalogItem<Track>, TrackServiceError> {
+        let mut track = self.get_track(title).await?;
+        track.favorite = true;
+
+        self.repository_context
+            .track
+            .lock()
+            .await
+            .update(track)
+            .await
+            .map_err(|e| TrackServiceError::Internal(e.into()))
+    }
+
     pub async fn get_track(&mut self, name: &str) -> Result<CatalogItem<Track>, TrackServiceError> {
         let tracks = self
             .repository_context

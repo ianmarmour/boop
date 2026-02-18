@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use sqlx::AnyPool;
+use sqlx::SqlitePool;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -57,7 +57,7 @@ pub struct RepositoryContext {
 }
 
 impl RepositoryContext {
-    pub async fn new(pool: AnyPool) -> Result<Self, RepositoryError> {
+    pub async fn new(pool: SqlitePool) -> Result<Self, RepositoryError> {
         Ok(Self {
             artist: Arc::new(Mutex::new(ArtistRepository::new(pool.clone()).await?)),
             release: Arc::new(Mutex::new(ReleaseRepository::new(pool.clone()).await?)),

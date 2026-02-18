@@ -8,23 +8,35 @@ use crate::{
     repository::{artist::ArtistFilter, release::ReleaseFilter, track::TrackFilter},
     service::CatalogService,
 };
-use iced::widget::operation::scroll_to;
 use iced::{
-    Background, Border, Color, Element, Length, Shadow, Task, Theme,
+    Alignment, Background, Border, Color, Element, Length, Padding, Shadow, Task, Theme,
+    alignment::{Horizontal, Vertical},
     keyboard::Key,
-    widget::button,
-    widget::scrollable,
     widget::{
-        Id,
+        Id, Space, button,
         button::{Status, Style},
-        container::{self},
+        container,
+        image::{Handle, Image},
         keyed::Column,
+        scrollable,
         scrollable::AutoScroll,
         text,
     },
 };
+use iced::{
+    alignment,
+    widget::{image, operation::scroll_to, row},
+};
 use thiserror::Error;
 use tracing::info;
+
+const FAVORITE_ICON: &[u8] = include_bytes!("../../resources/favorite.png");
+
+const ITEM_HEIGHT: f32 = 60.0;
+const ITEM_SPACING: f32 = 5.0;
+const ROW_STRIDE: f32 = ITEM_HEIGHT + ITEM_SPACING;
+const MENU_HEIGHT: f32 = 50.0;
+const VIEWPORT_HEIGHT: f32 = 720.0 - MENU_HEIGHT; // 670.0
 
 #[derive(Debug, Clone, Default)]
 pub enum LibraryView {
@@ -79,7 +91,7 @@ impl LibraryItem {
                 self.catalog_item.clone(),
             ))))
             .width(Length::Fill)
-            .height(Length::Fixed(60.0))
+            .height(Length::Fixed(ITEM_HEIGHT))
             .style(button_style)
             .into()
     }
@@ -105,6 +117,7 @@ pub enum LibraryMessage {
     ItemLoad(Option<LibraryItem>),
     ChangeView(LibraryView),
     InputEvent(Key),
+    Scrolled(f32),
     Error(String),
 }
 
@@ -215,8 +228,9 @@ pub enum LibraryError {
 pub struct Library {
     catalog: Option<CatalogService>,
     items: LibraryItems,
-    scroll_id: Id,         // Add this
-    current_scroll_y: f32, // Add this to track scroll position
+    scroll_id: Id,
+    current_scroll_y: f32,
+    favorite_image: Handle,
 }
 
 impl Default for Library {
@@ -226,6 +240,7 @@ impl Default for Library {
             items: LibraryItems::new(vec![]),
             scroll_id: Id::unique(),
             current_scroll_y: 0.0,
+            favorite_image: Handle::from_bytes(FAVORITE_ICON),
         }
     }
 }
@@ -237,6 +252,7 @@ impl Library {
             items: LibraryItems::new(vec![]),
             scroll_id: Id::unique(),
             current_scroll_y: 0.0,
+            favorite_image: Handle::from_bytes(FAVORITE_ICON),
         };
 
         let task = Task::perform(
@@ -249,12 +265,15 @@ impl Library {
                     .await
             },
             |result| match result {
-                Ok(items) => LibraryMessage::ItemsLoad(
-                    items
-                        .into_iter()
-                        .map(|i| LibraryItem::new(i.into()))
-                        .collect(),
-                ),
+                Ok(items) => {
+                    info!("ItemsLoad received {} items", items.len());
+                    LibraryMessage::ItemsLoad(
+                        items
+                            .into_iter()
+                            .map(|i| LibraryItem::new(i.into()))
+                            .collect(),
+                    )
+                }
                 Err(e) => LibraryMessage::Error(e.to_string()),
             },
         );
@@ -263,14 +282,33 @@ impl Library {
     }
 
     pub fn view(&self) -> Element<'_, LibraryMessage> {
-        let mut col = Column::new().spacing(5);
+        let mut col = Column::new()
+            .spacing(ITEM_SPACING)
+            .padding(Padding::new(0.0).bottom(ITEM_HEIGHT));
 
         for item in self.items.iter() {
-            col = col.push(item.catalog_item.id, item.view());
+            let mut row = row![item.view()].height(ITEM_HEIGHT);
+
+            if item.catalog_item.favorite {
+                row = row.push(
+                    container(image(&self.favorite_image).width(24).height(24))
+                        .align_y(Vertical::Center)
+                        .align_x(Horizontal::Right)
+                        .width(44)
+                        .height(ITEM_HEIGHT),
+                );
+            }
+
+            col = col.push(item.catalog_item.id, row);
         }
 
         scrollable(col)
             .id(self.scroll_id.clone())
+            .on_scroll(|viewport| {
+                let y = viewport.absolute_offset().y;
+                let snapped = (y / ROW_STRIDE).round() * ROW_STRIDE;
+                LibraryMessage::Scrolled(snapped)
+            })
             .style(|theme, status| scrollable::Style {
                 container: container::Style::default(),
                 vertical_rail: scrollable::Rail {
@@ -297,6 +335,7 @@ impl Library {
                     icon: Color::WHITE,
                 },
             })
+            .height(Length::Fill)
             .into()
     }
 
@@ -309,6 +348,13 @@ impl Library {
             LibraryMessage::ItemsLoad(items) => {
                 self.items = LibraryItems::new(items);
                 Task::none()
+            }
+            LibraryMessage::Scrolled(y) => {
+                self.current_scroll_y = y;
+                scroll_to(
+                    self.scroll_id.clone(),
+                    scrollable::AbsoluteOffset { x: 0.0, y },
+                )
             }
             LibraryMessage::ItemLoad(item) => match item {
                 Some(library_item) => match library_item.catalog_item.metadata {
@@ -408,22 +454,12 @@ impl Library {
                         .position(|item| item.selected)
                         .unwrap_or(0);
 
-                    let scroll_id = self.scroll_id.clone();
-                    let item_height = 65.0;
-                    let viewport_height = 680.0;
-                    let padding = 10.0; // Add some breathing room
+                    let item_top = selected_idx as f32 * ROW_STRIDE;
 
-                    // Calculate item position
-                    let item_top = selected_idx as f32 * item_height;
-                    let item_bottom = item_top + item_height;
-
-                    // Only scroll if item is above visible viewport
                     if item_top < self.current_scroll_y {
-                        // Keep selected item at TOP when scrolling up
                         self.current_scroll_y = item_top;
-
                         scroll_to(
-                            scroll_id,
+                            self.scroll_id.clone(),
                             scrollable::AbsoluteOffset {
                                 x: 0.0,
                                 y: item_top,
@@ -443,22 +479,14 @@ impl Library {
                         .position(|item| item.selected)
                         .unwrap_or(0);
 
-                    let scroll_id = self.scroll_id.clone();
-                    let item_height = 65.0;
-                    let viewport_height = 680.0;
-                    let padding = 25.0; // Add some breathing room
+                    let item_top = selected_idx as f32 * ROW_STRIDE;
+                    let item_bottom = item_top + ITEM_HEIGHT;
 
-                    // Calculate item position
-                    let item_top = selected_idx as f32 * item_height;
-                    let item_bottom = item_top + item_height;
-
-                    // Only scroll if item is below viewport
-                    if item_bottom > self.current_scroll_y + viewport_height {
-                        let new_scroll_y = item_bottom - viewport_height + padding;
+                    if item_bottom > self.current_scroll_y + VIEWPORT_HEIGHT {
+                        let new_scroll_y = item_top - VIEWPORT_HEIGHT + ITEM_HEIGHT;
                         self.current_scroll_y = new_scroll_y;
-
                         scroll_to(
-                            scroll_id,
+                            self.scroll_id.clone(),
                             scrollable::AbsoluteOffset {
                                 x: 0.0,
                                 y: new_scroll_y,
@@ -600,7 +628,6 @@ impl Library {
             LibraryMessage::Error(test) => {
                 info!(test);
                 Task::none()
-                //todo!()
             }
             LibraryMessage::ChangeView(_) => Task::none(),
         }

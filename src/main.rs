@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use cpal::{Device, traits::HostTrait};
-use sqlx::pool::PoolOptions;
+use sqlx::{pool::PoolOptions, sqlite::SqlitePoolOptions};
 
 use iced::{Color, Font, Pixels, Settings, Size, Theme};
 
@@ -32,7 +32,7 @@ fn main() -> iced::Result {
     let catalog_service = rt.block_on(async {
         sqlx::any::install_default_drivers();
 
-        let database_pool = PoolOptions::new()
+        let database_pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect("sqlite:database.db?mode=rwc")
             .await

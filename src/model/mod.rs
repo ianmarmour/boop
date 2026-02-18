@@ -10,6 +10,7 @@ pub mod track;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CatalogItem<T> {
     pub id: i64,
+    pub favorite: bool,
     pub metadata: T,
 }
 
@@ -34,6 +35,7 @@ impl From<CatalogItem<Artist>> for CatalogItem<CatalogMetadata> {
     fn from(item: CatalogItem<Artist>) -> Self {
         CatalogItem {
             id: item.id,
+            favorite: item.favorite,
             metadata: CatalogMetadata::Artist(item.metadata),
         }
     }
@@ -43,6 +45,7 @@ impl From<CatalogItem<Release>> for CatalogItem<CatalogMetadata> {
     fn from(item: CatalogItem<Release>) -> Self {
         CatalogItem {
             id: item.id,
+            favorite: item.favorite,
             metadata: CatalogMetadata::Release(item.metadata),
         }
     }
@@ -52,20 +55,26 @@ impl From<CatalogItem<Track>> for CatalogItem<CatalogMetadata> {
     fn from(item: CatalogItem<Track>) -> Self {
         CatalogItem {
             id: item.id,
+            favorite: item.favorite,
             metadata: CatalogMetadata::Track(item.metadata),
         }
     }
 }
 
-impl<'r, T> FromRow<'r, sqlx::any::AnyRow> for CatalogItem<T>
+impl<'r, T> FromRow<'r, sqlx::sqlite::SqliteRow> for CatalogItem<T>
 where
     T: for<'de> Deserialize<'de>,
 {
-    fn from_row(row: &'r sqlx::any::AnyRow) -> Result<Self, sqlx::Error> {
+    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
         let id: i64 = row.try_get("id")?;
+        let favorite: bool = row.try_get("favorite")?;
         let raw_json: String = row.try_get("metadata")?;
         let metadata: T =
             serde_json::from_str(&raw_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
-        Ok(CatalogItem { id, metadata })
+        Ok(CatalogItem {
+            id,
+            favorite,
+            metadata,
+        })
     }
 }
