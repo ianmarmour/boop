@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use battery::units::{Ratio, ratio::percent};
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local};
 use iced::{
     Element, Length, Padding, Subscription, Task,
     alignment::Horizontal,
@@ -10,13 +9,10 @@ use iced::{
 };
 use tracing::debug;
 
-use crate::{
-    battery::BatteryHandle,
-    frontend::{
-        application::ApplicationView,
-        battery::{Battery, BatteryMessage},
-        player::PlayerState,
-    },
+use crate::frontend::{
+    application::ApplicationView,
+    battery::{Battery, BatteryMessage},
+    player::PlayerState,
 };
 
 #[derive(Debug, Clone)]
@@ -55,7 +51,7 @@ impl Menu {
         }
     }
     pub fn view(&self) -> Element<'_, MenuMessage> {
-        row![
+        let mut menu_row = row![
             Column::new()
                 .push(text(self.current_view.to_string()))
                 .width(Length::FillPortion(1)),
@@ -63,15 +59,22 @@ impl Menu {
                 .push(text(self.datetime.format("%H:%M").to_string()))
                 .width(Length::Shrink)
                 .align_x(Horizontal::Center),
-            Column::new()
-                .push(self.battery.view().map(MenuMessage::Battery))
-                .width(Length::FillPortion(1))
-                .padding(Padding::new(0.0).top(15))
-                .align_x(Horizontal::Right),
-        ]
-        .padding(Padding::new(0.0).horizontal(10.0))
-        .height(50)
-        .into()
+        ];
+
+        if self.battery.has_battery() {
+            menu_row = menu_row.push(
+                Column::new()
+                    .push(self.battery.view().map(MenuMessage::Battery))
+                    .width(Length::FillPortion(1))
+                    .padding(Padding::new(0.0).top(15))
+                    .align_x(Horizontal::Right),
+            );
+        }
+
+        menu_row
+            .padding(Padding::new(0.0).horizontal(10.0))
+            .height(50)
+            .into()
     }
     pub fn update(&mut self, message: MenuMessage) -> Task<MenuMessage> {
         match message {

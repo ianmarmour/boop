@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use cpal::{Device, traits::HostTrait};
 use sqlx::sqlite::SqlitePoolOptions;
 
@@ -46,9 +44,13 @@ fn main() -> iced::Result {
             .await
             .expect("error initializing services");
 
-        let _ = service
-            .sync(PathBuf::from("/Users/ian/Desktop/music/"))
-            .await;
+        let music_dir = dirs::audio_dir().unwrap_or_else(|| {
+            let mut p = dirs::home_dir().expect("could not determine home directory");
+            p.push("Music");
+            p
+        });
+
+        let _ = service.sync(music_dir).await;
 
         return service;
     });
