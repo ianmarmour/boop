@@ -51,7 +51,17 @@ impl Menu {
         }
     }
     pub fn view(&self) -> Element<'_, MenuMessage> {
-        let mut menu_row = row![
+        let right_column = if self.battery.has_battery() {
+            Column::new()
+                .push(self.battery.view().map(MenuMessage::Battery))
+                .width(Length::FillPortion(1))
+                .padding(Padding::new(0.0).top(15))
+                .align_x(Horizontal::Right)
+        } else {
+            Column::new().width(Length::FillPortion(1))
+        };
+
+        let menu_row = row![
             Column::new()
                 .push(text(self.current_view.to_string()))
                 .width(Length::FillPortion(1)),
@@ -59,17 +69,8 @@ impl Menu {
                 .push(text(self.datetime.format("%H:%M").to_string()))
                 .width(Length::Shrink)
                 .align_x(Horizontal::Center),
+            right_column,
         ];
-
-        if self.battery.has_battery() {
-            menu_row = menu_row.push(
-                Column::new()
-                    .push(self.battery.view().map(MenuMessage::Battery))
-                    .width(Length::FillPortion(1))
-                    .padding(Padding::new(0.0).top(15))
-                    .align_x(Horizontal::Right),
-            );
-        }
 
         menu_row
             .padding(Padding::new(0.0).horizontal(10.0))
